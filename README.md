@@ -14,33 +14,43 @@ from niceboard import Client
 
 # Initialize the client
 
+```python
 client = Client(api_key="your_api_key")
+```
 
 # List all jobs
 
+```python
 jobs = client.jobs.list()
+```
 
 # Create a company
 
+```python
 company = client.companies.create(
-name="Example Corp",
-site_url="https://example.com",
-description="An awesome company"
+  name="Example Corp",
+  site_url="https://example.com",
+  description="An awesome company"
 )
+```
 
 # Create a job posting
 
+```python
 job = client.jobs.create(
-company_id=company["id"],
-jobtype_id=1,
-title="Senior Developer",
-description_html="<p>Join our team!</p>",
-location_id=client.locations.get_or_create("San Francisco, CA")
+  company_id=company["id"],
+  jobtype_id=1,
+  title="Senior Developer",
+  description_html="<p>Join our team!</p>",
+  location_id=client.locations.get_or_create("San Francisco, CA")
 )
+```
 
 # Update a job
 
+```python
 updated_job = client.jobs.update(
-job_id=job["id"],
-title="Senior Software Developer"
+  job_id=job["id"],
+  title="Senior Software Developer"
 )
+```
