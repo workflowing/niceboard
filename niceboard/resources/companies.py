@@ -48,3 +48,16 @@ class Companies(Resource):
 
         response = self._make_request("POST", "companies", data=payload)
         return response.json()
+
+    def delete(self, company_id: int) -> Dict[str, Any]:
+        """
+        Delete a specific company by ID.
+
+        Args:
+            company_id (int): ID of the company to delete
+
+        Returns:
+            Dict[str, Any]: Response from the API
+        """
+        response = self._make_request("DELETE", f"companies/{company_id}")
+        return response.json()
