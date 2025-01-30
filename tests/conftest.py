@@ -40,6 +40,6 @@ def client():
 @pytest.fixture
 def mock_session(mocker):
     """Mock session for testing API calls"""
-    mock = mocker.patch("requests.Session")
+    mock = mocker.patch("niceboard.client.Session")
     mock.return_value.headers = {}
     return mock
