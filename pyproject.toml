@@ -7,20 +7,29 @@ name = "niceboard"
 version = "0.1.0"
 description = "A Python client for the Niceboard API"
 authors = [
-    {name = "Your Name", email = "dean.singh@gmail.com"},
+ {name = "Your Name", email = "dean.singh@gmail.com"},
 ]
 dependencies = [
-    "requests>=2.25.0",
-    "geopy>=2.2.0",
-    "tenacity>=8.0.0",
+ "requests>=2.25.0",
+ "geopy>=2.2.0",
+ "tenacity>=8.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=6.0",
-    "pytest-cov>=2.0",
-    "black>=21.0",
-    "isort>=5.0",
-    "mypy>=0.900",
-    "flake8>=3.9",
+ "pytest>=6.0",
+ "pytest-cov>=2.0",
+ "pytest-mock>=3.10.0",
+ "responses>=0.23.0",
+ "python-dotenv>=1.0.0",
+ "black>=21.0",
+ "isort>=5.0",
+ "mypy>=0.900",
+ "flake8>=3.9",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: marks tests as integration tests",
+    "destructive: marks tests that modify data"
 ]

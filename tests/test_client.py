@@ -14,7 +14,7 @@ def test_client_requires_api_key():
         Client(api_key=None)
 
 
-def test_client_session_headers(client):
-    session = client.session
+def test_client_session_headers(mock_client):
+    session = mock_client.session
     assert session.headers["Accept"] == "application/json"
     assert session.headers["Content-Type"] == "application/json"
