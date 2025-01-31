@@ -52,3 +52,8 @@ class Jobs(Resource):
         """Update an existing job."""
         response = self._make_request("PATCH", f"jobs/{job_id}", data=kwargs)
         return response.json()
+
+    def delete(self, job_id: int) -> Dict[str, Any]:
+        """Update an existing job."""
+        response = self._make_request("DELETE", f"jobs/{job_id}")
+        return response.json()
