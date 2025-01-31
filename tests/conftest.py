@@ -32,9 +32,10 @@ def mock_client():
 def client():
     """Create a real client instance with API key from environment"""
     api_key = os.getenv("NICEBOARD_API_KEY")
+    base_url = os.getenv("NICEBOARD_BASE_URL")
     if not api_key:
         pytest.skip("NICEBOARD_API_KEY environment variable not set")
-    return Client(api_key=api_key)
+    return Client(api_key=api_key, base_url=base_url)
 
 
 @pytest.fixture
