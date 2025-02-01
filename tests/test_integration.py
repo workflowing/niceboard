@@ -251,7 +251,7 @@ class TestIntegration:
                 pytest.skip("No jobs available to test with")
 
             job_id = jobs[0]["id"]
-            job = client.jobs.get(job_id)
+            job = client.jobs.get(job_id=job_id)
 
             print("\nSingle Job Response Structure:")
             pprint(job)
@@ -300,6 +300,11 @@ class TestIntegration:
             created_job_id = created_job["id"]
 
             print(f"\ncreated_job: {created_job} created_job_id {created_job_id}")
+
+            job = client.jobs.get(job_id=created_job_id)
+
+            print("\nSingle Job Response Structure:")
+            pprint(job)
 
             # Update job data
             update_data = {
