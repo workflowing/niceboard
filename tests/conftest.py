@@ -25,7 +25,7 @@ def api_key():
 @pytest.fixture
 def mock_client():
     """Client with mock API key for unit tests"""
-    return Client(api_key="test_key")
+    return Client(api_key="test_key", base_url="https://api.niceboard.com")
 
 
 @pytest.fixture
