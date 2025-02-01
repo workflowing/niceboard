@@ -47,7 +47,6 @@ class TestJobs:
 
         jobs = mock_client.jobs.list()
 
-        # Assertions
         assert len(jobs) == 1
         assert jobs[0]["id"] == 1651824
         assert jobs[0]["title"] == "VP of Finance - Controls & FinOps"
@@ -59,7 +58,6 @@ class TestJobs:
         assert jobs[0]["category"]["name"] == "Finance Leadership"
 
     def test_create_job(self, mock_client, mock_session):
-        # Test input data
         job_data = {
             "title": "Job to Delete",
             "description_html": "<p>Job that will be deleted</p>",
@@ -70,7 +68,6 @@ class TestJobs:
             "salary_timeframe": "annually",
         }
 
-        # Response data based on actual API response
         response_data = {
             "success": True,
             "job": {
@@ -103,7 +100,6 @@ class TestJobs:
 
         created = mock_client.jobs.create(**job_data)
 
-        # Assertions
         assert created["success"] is True
         assert created["job"]["id"] == 1664341
         assert created["job"]["title"] == job_data["title"]
@@ -192,6 +188,81 @@ class TestJobs:
         # Execute test
         response = mock_client.jobs.delete(job_id=1651824)
 
-        # Assertions
         assert response["error"] is False
         assert response["results"]["deleted"] is True
+
+    def test_update_job(self, mock_client, mock_session):
+        job_data = {
+            "title": "Updated Software Engineer",
+            "description_html": "<p>Updated job description</p>",
+            "jobtype_id": 16388,
+            "apply_by_form": True,
+            "show_salary": True,
+            "salary_timeframe": "annually",
+            "salary_currency": "100K TO 200K",
+        }
+
+        response_data = {
+            "success": True,
+            "job": {
+                "id": 1664466,
+                "title": "Updated Software Engineer",
+                "description_html": "<p>Updated job description</p>",
+                "company_id": 355591,
+                "jobtype_id": 16388,
+                "apply_by_form": True,
+                "apply_email": None,
+                "apply_url": None,
+                "is_draft": False,
+                "is_featured": False,
+                "is_filled": False,
+                "is_published": True,
+                "is_remote": False,
+                "jobboard_id": 3297,
+                "created_at": "2025-02-01T00:01:16.152Z",
+                "updated_at": "2025-02-01T00:01:16.152Z",
+                "expires_on": "2025-03-03T00:01:16.151Z",
+                "published_at": "2025-02-01T00:01:17.151Z",
+                "uid": "i8cY4NDc9g",
+                "slug": "updated-software-engineer",
+                "salary_timeframe": "annually",
+                "show_salary": True,
+                "salary_currency": "100K TO 200K",
+                "custom_fields": {},
+                "location_name": None,
+                "location_id": None,
+                "category_id": None,
+                "experience": None,
+                "filled_at": None,
+                "how_to_apply": None,
+                "is_paid": False,
+                "is_sample": False,
+                "last_google_deindexed_at": None,
+                "last_google_indexed_at": None,
+                "last_indexed_at": "2025-02-01T00:01:16.392Z",
+                "remote_only": False,
+                "remote_required_location": None,
+                "salary_description": None,
+                "salary_max": None,
+                "salary_min": None,
+                "scheduled_at": None,
+                "secondary_category_id": None,
+            },
+        }
+
+        mock_session.return_value.request.return_value.json.return_value = response_data
+
+        updated = mock_client.jobs.update(job_id=1664466, **job_data)
+
+        assert updated["success"] is True
+        assert updated["job"]["id"] == 1664466
+        assert updated["job"]["title"] == job_data["title"]
+        assert updated["job"]["description_html"] == job_data["description_html"]
+        assert updated["job"]["jobtype_id"] == job_data["jobtype_id"]
+        assert updated["job"]["apply_by_form"] == job_data["apply_by_form"]
+        assert updated["job"]["show_salary"] == job_data["show_salary"]
+        assert updated["job"]["salary_timeframe"] == job_data["salary_timeframe"]
+        assert updated["job"]["salary_currency"] == job_data["salary_currency"]
+        assert "uid" in updated["job"]
+        assert "slug" in updated["job"]
+        assert updated["job"]["is_published"] is True
