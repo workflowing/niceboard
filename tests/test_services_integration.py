@@ -181,3 +181,129 @@ class TestSearchService:
         page1_ids = {job["id"] for job in page1["entries"]}
         page2_ids = {job["id"] for job in page2["entries"]}
         assert not page1_ids.intersection(page2_ids)
+
+    @pytest.mark.integration
+    def test_search_companies_by_name(self, search_service):
+        """Test company search by name."""
+        results = search_service.search_companies(
+            fields=["id", "name", "site_url"], display="all"
+        )
+
+        assert results["status"] == "success"
+        assert "entries" in results
+        assert len(results["entries"]) > 0
+
+        sample_company = results["entries"][0]
+        search_term = sample_company["name"][:4]
+
+        search_results = search_service.search_companies(
+            fields=["id", "name"], filters={"keyword": search_term}, display="all"
+        )
+
+        assert search_results["status"] == "success"
+        assert len(search_results["entries"]) > 0
+        assert all(
+            search_term.lower() in company["name"].lower()
+            for company in search_results["entries"]
+        )
+
+    @pytest.mark.integration
+    def test_search_companies_by_id(self, search_service):
+        """Test company search by ID."""
+        initial_results = search_service.search_companies(
+            fields=["id", "name"], display="all"
+        )
+
+        assert initial_results["status"] == "success"
+        assert len(initial_results["entries"]) > 0
+
+        company_id = initial_results["entries"][0]["id"]
+
+        results = search_service.search_companies(
+            filters={"id": company_id}, display="all"
+        )
+
+        assert results["status"] == "success"
+        assert len(results["entries"]) == 1
+        assert results["entries"][0]["id"] == company_id
+
+    @pytest.mark.integration
+    def test_search_companies_with_multiple_fields(self, search_service):
+        """Test company search with multiple field selection."""
+        fields = [
+            "id",
+            "name",
+            "site_url",
+            "description_html",
+            "logo_url",
+            "linkedin_url",
+            "twitter_handle",
+            "slug",
+        ]
+
+        results = search_service.search_companies(fields=fields, display="all")
+
+        assert results["status"] == "success"
+        assert "entries" in results
+        assert len(results["entries"]) > 0
+
+        for field in fields:
+            assert field in results["entries"][0]
+
+    @pytest.mark.integration
+    def test_search_companies_display_modes(self, search_service):
+        """Test different display modes for company search."""
+        summary_results = search_service.search_companies(display="summary")
+        assert "statistics" in summary_results
+        assert "entries" not in summary_results
+
+        sample_results = search_service.search_companies(
+            display="show_n", sample_size=3
+        )
+        assert "sample_entries" in sample_results
+        assert len(sample_results["sample_entries"]) <= 3
+
+        all_results = search_service.search_companies(display="all")
+        assert "entries" in all_results
+
+    @pytest.mark.integration
+    def test_search_companies_pagination(self, search_service):
+        """Test client-side pagination for companies search."""
+
+        all_companies = search_service.search_companies(
+            fields=["id", "name"], display="all"
+        )
+
+        assert all_companies["status"] == "success"
+        total_companies = all_companies["pagination"]["total"]
+
+        page1 = search_service.search_companies(
+            fields=["id", "name"], filters={"limit": 5, "page": 1}, display="all"
+        )
+
+        page2 = search_service.search_companies(
+            fields=["id", "name"], filters={"limit": 5, "page": 2}, display="all"
+        )
+
+        assert page1["status"] == "success"
+        assert page2["status"] == "success"
+
+        assert page1["pagination"]["page"] == 1
+        assert page2["pagination"]["page"] == 2
+        assert page1["pagination"]["limit"] == 5
+        assert page2["pagination"]["limit"] == 5
+        assert page1["pagination"]["total"] == total_companies
+        assert page2["pagination"]["total"] == total_companies
+
+        assert len(page1["entries"]) == 5
+        assert len(page2["entries"]) <= 5
+
+        page1_ids = {company["id"] for company in page1["entries"]}
+        page2_ids = {company["id"] for company in page2["entries"]}
+        assert not page1_ids.intersection(
+            page2_ids
+        ), "Pages should contain different companies"
+
+        assert [company["id"] for company in page1["entries"]] == [
+            company["id"] for company in all_companies["entries"][:5]
+        ]

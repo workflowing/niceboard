@@ -43,11 +43,11 @@ class NiceBoardSearchService:
             "id",
             "name",
             "site_url",
-            "description",
-            "logo",
+            "description_html",
+            "logo_url",
             "linkedin_url",
             "twitter_handle",
-            "active_jobs",
+            "slug",
         },
         "locations": {"id", "name", "slug", "job_count"},
         "categories": {"id", "name", "slug", "job_count"},
@@ -170,18 +170,27 @@ class NiceBoardSearchService:
 
             processed_filters = self._process_filters(filters or {})
 
+            page = int(processed_filters.get("page", 1))
+            limit = min(int(processed_filters.get("limit", 30)), 100)
+
             if query_type == "jobs":
                 results = self.client.jobs.list(**processed_filters)
-            elif query_type == "companies":
-                results = self.client.companies.list()
-            elif query_type == "locations":
-                results = self.client.locations.list()
-            elif query_type == "categories":
-                results = self.client.categories.list()
-            elif query_type == "jobtypes":
-                results = self.client.job_types.list()
             else:
-                raise SearchError(f"Unsupported query type: {query_type}")
+                if query_type == "companies":
+                    all_results = self.client.companies.list()
+                    all_results = self._filter_companies(all_results, processed_filters)
+                elif query_type == "locations":
+                    all_results = self.client.locations.list()
+                elif query_type == "categories":
+                    all_results = self.client.categories.list()
+                elif query_type == "jobtypes":
+                    all_results = self.client.job_types.list()
+                else:
+                    raise SearchError(f"Unsupported query type: {query_type}")
+
+                start_idx = (page - 1) * limit
+                end_idx = start_idx + limit
+                results = all_results[start_idx:end_idx]
 
             full_results = results
 
@@ -203,9 +212,18 @@ class NiceBoardSearchService:
             else:
                 filtered_results = results
 
-            return self._format_results(
+            response = self._format_results(
                 full_results, filtered_results, display=display, sample_size=sample_size
             )
+
+            response["pagination"] = {
+                "page": page,
+                "limit": limit,
+                "total": len(all_results) if query_type != "jobs" else len(results),
+            }
+
+            return response
+
         except Exception as e:
             raise SearchError(f"Search failed: {str(e)}") from e
 
@@ -242,6 +260,7 @@ class NiceBoardSearchService:
             "location.slug": "location",
             "limit": "limit",
             "page": "page",
+            "id": "id",
         }
 
         for key, value in filters.items():
@@ -253,5 +272,34 @@ class NiceBoardSearchService:
                     value = bool(value)
                 elif key == "location" and value is not None:
                     value = str(value).strip()
+                elif key == "id" and value is not None:
+                    value = int(value) if str(value).isdigit() else value
                 processed[mapped_key] = value
         return processed
+
+    def _filter_companies(
+        self, companies: List[Dict[str, Any]], filters: Dict[str, Any]
+    ) -> List[Dict[str, Any]]:
+        """Filter companies based on provided filters."""
+        filtered_companies = companies
+
+        if not filters:
+            return filtered_companies
+
+        if "keyword" in filters:
+            keyword = filters["keyword"].lower()
+            filtered_companies = [
+                company
+                for company in filtered_companies
+                if keyword in company.get("name", "").lower()
+            ]
+
+        if "id" in filters:
+            company_id = filters["id"]
+            filtered_companies = [
+                company
+                for company in filtered_companies
+                if company.get("id") == company_id
+            ]
+
+        return filtered_companies
