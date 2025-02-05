@@ -10,50 +10,63 @@ pip install niceboard
 
 ## Quickstart
 
-from niceboard import Client
-
-# Initialize the client
-
 ```python
+from niceboard import Client
+from niceboard.services.search import NiceBoardSearchService
+
+# Initialize the basic client
 client = Client(api_key="your_api_key")
-```
+
+# Initialize the search service
+search_service = NiceBoardSearchService(api_key="your_api_key")
 
 # List all jobs
-
-```python
 jobs = client.jobs.list()
-```
 
-# Create a company
+# Search jobs with specific fields
+job_results = search_service.search_jobs(
+    fields=["title", "company", "location"],
+    display="all"
+)
 
-```python
-company = client.companies.create(
-  name="Example Corp",
-  site_url="https://example.com",
-  description="An awesome company"
+# Search companies
+company_results = search_service.search_companies(
+    fields=["id", "name", "site_url"],
+    display="all"
 )
 ```
 
-# Create a job posting
+## Search Service Features
 
-```python
-job = client.jobs.create(
-  company_id=company["id"],
-  jobtype_id=1,
-  title="Senior Developer",
-  description_html="<p>Join our team!</p>",
-  location_id=client.locations.get_or_create("San Francisco, CA")
-)
-```
+The search service provides advanced search capabilities with:
 
-# Update a job
+### Display Modes
 
-```python
-updated_job = client.jobs.update(
-  job_id=job["id"],
-  title="Senior Software Developer"
-)
-```
+- `summary`: Returns statistics only
+- `show_n`: Returns statistics and a sample of entries
+- `all`: Returns statistics and all entries
+
+### Search Types
+
+- Jobs (`search_jobs`)
+- Companies (`search_companies`)
+- Locations (`search_locations`)
+- Categories (`search_categories`)
+- Job Types (`search_jobtypes`)
+
+### Filtering Options
+
+- Remote jobs (`remote_ok`)
+- Company filters
+- Location filters
+- Category filters
+- Job type filters
+- Pagination (`limit` and `page`)
+- Keyword search (for companies)
+
+### Field Selection
+
+Supports nested field selection using dot notation (e.g., 'company.name', 'location.slug')
 
 ## Tests
 
@@ -63,71 +76,52 @@ This project uses pytest for testing and includes both unit tests and integratio
 
 - **Unit Tests**: Tests individual components in isolation using mocks
 - **Integration Tests**: Tests actual API interactions
-  - Safe tests: Read-only operations (listing and getting resources)
-  - Destructive tests: Write operations (create, update, delete)
+  - Safe tests: Read-only operations (listing, searching, and getting resources)
+  - Each test category (jobs, companies, etc.) has dedicated test cases
 
-### Running Tests
-
-Run all tests:
-
-```bash
-pytest
-```
-
-Run with verbose output:
-
-```bash
-pytest -v
-```
-
-Run only integration tests that are safe (non-destructive):
-
-```bash
-pytest -v -m "integration and not destructive"
-```
-
-Run all integration tests including destructive operations:
-
-```bash
-pytest -v -m "integration and destructive"
-```
-
-Run with print statement output:
-
-```bash
-pytest -v -s
-```
-
-Run a specific test file:
-
-```bash
-pytest tests/test_integration.py
-```
-
-Run a specific test:
-
-```bash
-pytest tests/test_integration.py::TestIntegration::test_list_companies
-```
-
-### Test Configuration
+### Environment Setup
 
 Integration tests require:
 
-- A valid API key set in the `NICEBOARD_API_KEY` environment variable
-- Optionally, a custom API URL in `NICEBOARD_BASE_URL`
+- `NICEBOARD_API_KEY`: Required for authentication
+- `NICEBOARD_BASE_URL`: Optional custom API URL
+
+### Running Tests
+
+```bash
+# Run all tests
+pytest
+
+# Run with verbose output
+pytest -v
+
+# Run only integration tests
+pytest -v -m "integration"
+
+# Run with print statement output
+pytest -v -s
+
+# Run a specific test file
+pytest tests/test_services_integration.py
+
+# Run a specific test
+pytest tests/test_services_integration.py::TestSearchService::test_search_jobs_basic
+```
 
 ### Test Categories
 
-| Category                | Description                             | When to Run                     |
-| ----------------------- | --------------------------------------- | ------------------------------- |
-| Unit Tests              | Tests individual components with mocks  | During development              |
-| Safe Integration        | Tests read operations against live API  | During development              |
-| Destructive Integration | Tests write operations against live API | When testing data modifications |
+| Category       | Description                               | Example Tests                     |
+| -------------- | ----------------------------------------- | --------------------------------- |
+| Job Search     | Tests job search functionality            | Basic search, filters, pagination |
+| Company Search | Tests company search functionality        | Name search, ID search            |
+| Display Modes  | Tests different result display options    | Summary, sample, all entries      |
+| Error Handling | Tests invalid inputs and error conditions | Invalid fields, query types       |
+| Pagination     | Tests result pagination                   | Page limits, result consistency   |
 
 ### Best Practices
 
 1. Always run unit tests during development
-2. Run safe integration tests before committing
-3. Run destructive tests in a controlled environment
-4. Use `-s` flag to see print outputs for debugging
+2. Run integration tests before committing changes
+3. Use environment variables for configuration
+4. Handle rate limits and API quotas appropriately
+5. Use `-s` flag to see print outputs for debugging
