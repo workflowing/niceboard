@@ -74,9 +74,7 @@ class NiceBoardSearchService:
     def _format_results(
         self,
         results: List[Dict[str, Any]],
-        filtered_results: List[Dict[str, Any]],
         display: str = "summary",
-        sample_size: int = 5,
     ) -> Dict[str, Any]:
         if not results:
             return {
@@ -123,12 +121,8 @@ class NiceBoardSearchService:
             },
         }
 
-        if display == "show_n":
-            response["sample_entries"] = self._process_entries(
-                filtered_results[:sample_size]
-            )
-        elif display == "all":
-            response["entries"] = self._process_entries(filtered_results)
+        if display == "show_n" or display == "all":
+            response["entries"] = results
 
         return response
 
@@ -156,18 +150,11 @@ class NiceBoardSearchService:
     def search(
         self,
         query_type: str,
-        fields: Optional[List[str]] = None,
         filters: Optional[Dict[str, Any]] = None,
         display: str = "summary",
-        sample_size: int = 5,
     ) -> Dict[str, Any]:
         try:
             self._validate_query_type(query_type)
-            if fields:
-                self._validate_fields(query_type, fields)
-            else:
-                fields = list(self.VALID_FIELDS[query_type])
-
             processed_filters = self._process_filters(filters or {})
 
             page = int(processed_filters.get("page", 1))
@@ -192,29 +179,7 @@ class NiceBoardSearchService:
                 end_idx = start_idx + limit
                 results = all_results[start_idx:end_idx]
 
-            full_results = results
-
-            if fields:
-                filtered_results = []
-                for result in results:
-                    filtered_result = {}
-                    for field in fields:
-                        if "." in field:
-                            resource, attribute = field.split(".")
-                            if resource in result and isinstance(
-                                result[resource], dict
-                            ):
-                                filtered_result[field] = result[resource].get(attribute)
-                        else:
-                            if field in result:
-                                filtered_result[field] = result[field]
-                    filtered_results.append(filtered_result)
-            else:
-                filtered_results = results
-
-            response = self._format_results(
-                full_results, filtered_results, display=display, sample_size=sample_size
-            )
+            response = self._format_results(results, display=display)
 
             response["pagination"] = {
                 "page": page,
@@ -311,10 +276,8 @@ class NiceBoardSearchService:
         Args:
             args: Dictionary containing:
                 query_type: str - Type of search (jobs, companies, locations, categories, jobtypes)
-                fields: List[str] - Optional fields to return
                 filters: Dict - Optional filters (remote_ok, company, category, etc.)
                 display: str - How to display results (summary or show_n)
-                sample_size: int - Number of entries to show for show_n display
                 page: int - Page number for pagination
                 limit: int - Results per page (max 100)
         """
@@ -326,8 +289,6 @@ class NiceBoardSearchService:
 
         return self.search(
             query_type=args.get("query_type"),
-            fields=args.get("fields"),
             filters=filters,
             display=args.get("display", "summary"),
-            sample_size=args.get("sample_size", 5),
         )
