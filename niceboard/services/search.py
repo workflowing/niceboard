@@ -10,50 +10,6 @@ from ..exceptions import SearchError
 class NiceBoardSearchService:
     VALID_QUERY_TYPES = {"jobs", "companies", "locations", "categories", "jobtypes"}
 
-    VALID_FIELDS = {
-        "jobs": {
-            "id",
-            "title",
-            "company",
-            "location",
-            "salary_min",
-            "salary_max",
-            "remote_only",
-            "remote_ok",
-            "remote_required_location",
-            "apply_url",
-            "published_at",
-            "description_html",
-            "category",
-            "jobtype",
-            "company.name",
-            "company.slug",
-            "location.name",
-            "location.slug",
-            "job_type.name",
-            "job_type.slug",
-            "category.name",
-            "category.slug",
-            "is_featured",
-            "tags",
-            "published_url",
-            "slug",
-        },
-        "companies": {
-            "id",
-            "name",
-            "site_url",
-            "description_html",
-            "logo_url",
-            "linkedin_url",
-            "twitter_handle",
-            "slug",
-        },
-        "locations": {"id", "name", "slug", "job_count"},
-        "categories": {"id", "name", "slug", "job_count"},
-        "jobtypes": {"id", "name", "slug", "job_count"},
-    }
-
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         self.api_key = api_key or os.getenv("NICEBOARD_API_KEY")
         self.base_url = base_url or os.getenv("NICEBOARD_BASE_URL")
@@ -137,15 +93,6 @@ class NiceBoardSearchService:
                 entry[field] = value
             processed.append(entry)
         return processed
-
-    def _validate_fields(self, query_type: str, fields: List[str]) -> None:
-        valid_fields = self.VALID_FIELDS[query_type]
-        invalid_fields = set(fields) - valid_fields
-        if invalid_fields:
-            raise SearchError(
-                f"Invalid fields for {query_type}: {invalid_fields}. "
-                f"For nested fields use dot notation (e.g. 'company.slug')"
-            )
 
     def search(
         self,
