@@ -2,6 +2,7 @@
 from requests import Session
 from tenacity import retry, stop_after_attempt, wait_exponential
 import logging
+import os
 
 
 class Resource:
@@ -22,6 +23,13 @@ class Resource:
         self.session = session
         self.base_url = base_url
         self.api_key = api_key
+
+    @property
+    def base_job_url(self) -> str:
+        """Get the base URL for job listings."""
+        base_url = os.getenv("NICEBOARD_BASE_URL")
+        domain = "/".join(base_url.split("/")[:3])
+        return f"{domain}/job"
 
     @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, max=10))
     def _make_request(self, method, endpoint, data=None, params=None):

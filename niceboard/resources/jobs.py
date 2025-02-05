@@ -22,7 +22,8 @@ class Jobs(Resource):
 
         response = self._make_request("GET", "jobs", params=params)
         data = response.json()
-        return data.get("results", {}).get("jobs", [])
+        jobs = data.get("results", {}).get("jobs", [])
+        return [self.add_job_fields(job) for job in jobs]
 
     def create(
         self,
@@ -46,7 +47,10 @@ class Jobs(Resource):
     def get(self, job_id: int) -> Dict[str, Any]:
         """Get a specific job by ID."""
         response = self._make_request("GET", f"jobs/{job_id}")
-        return response.json()
+        result = response.json()
+        if result:
+            result = self.add_job_fields(result)
+        return result
 
     def update(self, job_id: int, **kwargs) -> Dict[str, Any]:
         """Update an existing job."""
@@ -57,3 +61,10 @@ class Jobs(Resource):
         """Update an existing job."""
         response = self._make_request("DELETE", f"jobs/{job_id}")
         return response.json()
+
+    def add_job_fields(self, job: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Enrich job data with calculated properties.
+        """
+        job["published_url"] = f"{self.base_job_url}/{job['id']}-{job['slug']}"
+        return job
