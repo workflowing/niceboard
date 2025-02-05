@@ -77,7 +77,7 @@ class NiceBoardSearchService:
             },
         }
 
-        if display == "show_n" or display == "all":
+        if display == "limit" or display == "all":
             response["entries"] = results
 
         return response
@@ -224,7 +224,7 @@ class NiceBoardSearchService:
             args: Dictionary containing:
                 query_type: str - Type of search (jobs, companies, locations, categories, jobtypes)
                 filters: Dict - Optional filters (remote_ok, company, category, etc.)
-                display: str - How to display results (summary or show_n)
+                display: str - How to display results (summary or limit)
                 page: int - Page number for pagination
                 limit: int - Results per page (max 100)
         """
