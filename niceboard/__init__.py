@@ -1,6 +1,8 @@
-# niceboard/__init__.py
+from .services.search import NiceBoardSearchService
 from .client import Client
-from . import resources
+
+# For backwards compatibility
+from .services.search import NiceBoardSearchService as search_jobs
 
 __version__ = "0.1.0"
-__all__ = ["Client"]
+__all__ = ["search_jobs", "NiceBoardSearchService", "Client"]
