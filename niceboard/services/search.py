@@ -303,3 +303,31 @@ class NiceBoardSearchService:
             ]
 
         return filtered_companies
+
+    def search_niceboard(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute niceboard search with standardized args format.
+
+        Args:
+            args: Dictionary containing:
+                query_type: str - Type of search (jobs, companies, locations, categories, jobtypes)
+                fields: List[str] - Optional fields to return
+                filters: Dict - Optional filters (remote_ok, company, category, etc.)
+                display: str - How to display results (summary or show_n)
+                sample_size: int - Number of entries to show for show_n display
+                page: int - Page number for pagination
+                limit: int - Results per page (max 100)
+        """
+        filters = args.get("filters", {})
+        if "page" in args:
+            filters["page"] = args["page"]
+        if "limit" in args:
+            filters["limit"] = args["limit"]
+
+        return self.search(
+            query_type=args.get("query_type"),
+            fields=args.get("fields"),
+            filters=filters,
+            display=args.get("display", "summary"),
+            sample_size=args.get("sample_size", 5),
+        )

@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "niceboard"
-version = "0.1.1"
+version = "0.1.5"
 description = "A Python client for the Niceboard API"
 authors = [
- {name = "Your Name", email = "dean.singh@gmail.com"},
+ {name = "Dean Singh", email = "dean.singh@gmail.com"},
 ]
 dependencies = [
  "requests>=2.25.0",
