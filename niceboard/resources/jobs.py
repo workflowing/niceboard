@@ -48,9 +48,10 @@ class Jobs(Resource):
         """Get a specific job by ID."""
         response = self._make_request("GET", f"jobs/{job_id}")
         result = response.json()
-        if result:
-            result = self.add_job_fields(result)
-        return result
+        job = result.get("results", {}).get("job", {})
+        if job:
+            job = self.add_job_fields(job)
+        return job
 
     def update(self, job_id: int, **kwargs) -> Dict[str, Any]:
         """Update an existing job."""
