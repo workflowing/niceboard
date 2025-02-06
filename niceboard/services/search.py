@@ -30,7 +30,6 @@ class NiceBoardSearchService:
     def _format_results(
         self,
         results: List[Dict[str, Any]],
-        display: str = "summary",
     ) -> Dict[str, Any]:
         if not results:
             return {
@@ -77,8 +76,7 @@ class NiceBoardSearchService:
             },
         }
 
-        if display == "limit" or display == "all":
-            response["entries"] = results
+        response["entries"] = results
 
         return response
 
@@ -98,7 +96,6 @@ class NiceBoardSearchService:
         self,
         query_type: str,
         filters: Optional[Dict[str, Any]] = None,
-        display: str = "summary",
     ) -> Dict[str, Any]:
         try:
             self._validate_query_type(query_type)
@@ -126,7 +123,7 @@ class NiceBoardSearchService:
                 end_idx = start_idx + limit
                 results = all_results[start_idx:end_idx]
 
-            response = self._format_results(results, display=display)
+            response = self._format_results(results)
 
             response["pagination"] = {
                 "page": page,
@@ -224,7 +221,6 @@ class NiceBoardSearchService:
             args: Dictionary containing:
                 query_type: str - Type of search (jobs, companies, locations, categories, jobtypes)
                 filters: Dict - Optional filters (remote_ok, company, category, etc.)
-                display: str - How to display results (summary or limit)
                 page: int - Page number for pagination
                 limit: int - Results per page (max 100)
         """
@@ -237,5 +233,4 @@ class NiceBoardSearchService:
         return self.search(
             query_type=args.get("query_type"),
             filters=filters,
-            display=args.get("display", "summary"),
         )

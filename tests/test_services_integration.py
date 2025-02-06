@@ -24,7 +24,7 @@ class TestSearchService:
     @pytest.mark.integration
     def test_search_jobs_basic(self, search_service):
         """Test basic job search functionality."""
-        results = search_service.search_jobs(display="all")
+        results = search_service.search_jobs()
 
         assert results["status"] == "success"
         assert "count" in results
@@ -36,7 +36,6 @@ class TestSearchService:
     def test_search_jobs_with_company_filter(self, search_service):
         """Test job search with company filter."""
         initial_results = search_service.search_jobs(
-            display="show_n",
             filters={"limit": 5},
         )
 
@@ -46,25 +45,16 @@ class TestSearchService:
         company_name = initial_results["entries"][0]["company"]["name"]
         company_slug = initial_results["entries"][0]["company"]["slug"]
 
-        results = search_service.search_jobs(
-            filters={"company": company_slug}, display="all"
-        )
+        results = search_service.search_jobs(filters={"company": company_slug})
 
         assert results["status"] == "success"
         assert results["count"] > 0
         assert all(job["company"]["name"] == company_name for job in results["entries"])
 
     @pytest.mark.integration
-    def test_search_jobs_display_modes(self, search_service):
-        """Test different display modes."""
-        summary_results = search_service.search_jobs(display="summary")
-        assert "statistics" in summary_results
-        assert "entries" not in summary_results
-        assert summary_results["statistics"]["companies"]
-
-        sample_results = search_service.search_jobs(
-            display="show_n", filters={"limit": 3}
-        )
+    def test_search_jobs_limit(self, search_service):
+        """Test jobs with limit."""
+        sample_results = search_service.search_jobs(filters={"limit": 3})
         assert "entries" in sample_results
         assert len(sample_results["entries"]) <= 3
 
@@ -72,7 +62,6 @@ class TestSearchService:
     def test_search_jobs_with_location_filter(self, search_service):
         """Test job search with location filter."""
         initial_results = search_service.search_jobs(
-            display="show_n",
             filters={"limit": 5},
         )
 
@@ -88,9 +77,7 @@ class TestSearchService:
             location_name = None
             location_slug = None
 
-        results = search_service.search_jobs(
-            filters={"location": location_slug}, display="all"
-        )
+        results = search_service.search_jobs(filters={"location": location_slug})
 
         assert results["status"] == "success"
         assert results["count"] > 0
@@ -101,7 +88,7 @@ class TestSearchService:
     @pytest.mark.integration
     def test_search_jobs_with_remote_filter(self, search_service):
         """Test job search filtering for remote jobs."""
-        results = search_service.search_jobs(filters={"remote_ok": True}, display="all")
+        results = search_service.search_jobs(filters={"remote_ok": True})
 
         assert results["status"] == "success"
         all_remote_only = all(job["remote_only"] for job in results["entries"])
@@ -121,11 +108,9 @@ class TestSearchService:
     @pytest.mark.integration
     def test_search_jobs_pagination(self, search_service):
         """Test job search pagination."""
-        page1 = search_service.search_jobs(filters={"limit": 5}, display="all")
+        page1 = search_service.search_jobs(filters={"limit": 5})
 
-        page2 = search_service.search_jobs(
-            filters={"limit": 5, "page": 2}, display="all"
-        )
+        page2 = search_service.search_jobs(filters={"limit": 5, "page": 2})
 
         assert page1["status"] == "success"
         assert page2["status"] == "success"
@@ -139,7 +124,7 @@ class TestSearchService:
     @pytest.mark.integration
     def test_search_companies_by_name(self, search_service):
         """Test company search by name."""
-        results = search_service.search_companies(display="all")
+        results = search_service.search_companies()
 
         assert results["status"] == "success"
         assert "entries" in results
@@ -149,7 +134,7 @@ class TestSearchService:
         search_term = sample_company["name"][:4]
 
         search_results = search_service.search_companies(
-            filters={"keyword": search_term}, display="all"
+            filters={"keyword": search_term}
         )
 
         assert search_results["status"] == "success"
@@ -162,52 +147,37 @@ class TestSearchService:
     @pytest.mark.integration
     def test_search_companies_by_id(self, search_service):
         """Test company search by ID."""
-        initial_results = search_service.search_companies(display="all")
+        initial_results = search_service.search_companies()
 
         assert initial_results["status"] == "success"
         assert len(initial_results["entries"]) > 0
 
         company_id = initial_results["entries"][0]["id"]
 
-        results = search_service.search_companies(
-            filters={"id": company_id}, display="all"
-        )
+        results = search_service.search_companies(filters={"id": company_id})
 
         assert results["status"] == "success"
         assert len(results["entries"]) == 1
         assert results["entries"][0]["id"] == company_id
 
     @pytest.mark.integration
-    def test_search_companies_display_modes(self, search_service):
-        """Test different display modes for company search."""
-        summary_results = search_service.search_companies(display="summary")
-        assert "statistics" in summary_results
-        assert "entries" not in summary_results
-
-        sample_results = search_service.search_companies(
-            display="show_n", filters={"limit": 3}
-        )
+    def test_search_companies_limit(self, search_service):
+        """Test limit for company search."""
+        sample_results = search_service.search_companies(filters={"limit": 3})
         assert "entries" in sample_results
         assert len(sample_results["entries"]) <= 3
-
-        all_results = search_service.search_companies(display="all")
-        assert "entries" in all_results
 
     @pytest.mark.integration
     def test_search_companies_pagination(self, search_service):
         """Test client-side pagination for companies search."""
-        all_companies = search_service.search_companies(display="all")
+        all_companies = search_service.search_companies()
 
         assert all_companies["status"] == "success"
         total_companies = all_companies["pagination"]["total"]
 
-        page1 = search_service.search_companies(
-            filters={"limit": 5, "page": 1}, display="all"
-        )
+        page1 = search_service.search_companies(filters={"limit": 5, "page": 1})
 
-        page2 = search_service.search_companies(
-            filters={"limit": 5, "page": 2}, display="all"
-        )
+        page2 = search_service.search_companies(filters={"limit": 5, "page": 2})
 
         assert page1["status"] == "success"
         assert page2["status"] == "success"
