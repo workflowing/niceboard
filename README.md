@@ -40,12 +40,6 @@ company_results = search_service.search_companies(
 
 The search service provides advanced search capabilities with:
 
-### Display Modes
-
-- `summary`: Returns statistics only
-- `show_n`: Returns statistics and a sample of entries
-- `all`: Returns statistics and all entries
-
 ### Search Types
 
 - Jobs (`search_jobs`)
@@ -63,10 +57,6 @@ The search service provides advanced search capabilities with:
 - Job type filters
 - Pagination (`limit` and `page`)
 - Keyword search (for companies)
-
-### Field Selection
-
-Supports nested field selection using dot notation (e.g., 'company.name', 'location.slug')
 
 ## Tests
 
