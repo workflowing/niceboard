@@ -32,20 +32,9 @@ class GeocodeService:
                 )
 
                 if locations:
-                    location = locations[0]
-                    address = location.raw.get("address", {})
+                    location = str(locations[0])
 
-                    city = (
-                        address.get("city", "")
-                        or address.get("town", "")
-                        or address.get("village", "")
-                    )
-                    state = address.get("state", "")
-                    country = address.get("country", "")
-
-                    parts = [
-                        part.strip().title() for part in [city, state, country] if part
-                    ]
+                    parts = [part.strip() for part in location.split(",")]
                     standardized = ", ".join(parts)
 
                     self._cache[location_str] = standardized
