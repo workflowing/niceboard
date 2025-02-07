@@ -30,6 +30,7 @@ class Jobs(Resource):
         company_id: int,
         jobtype_id: int,
         title: str,
+        apply_by_form: bool,
         description_html: str,
         **kwargs,
     ) -> Dict[str, Any]:
@@ -38,6 +39,7 @@ class Jobs(Resource):
             "company_id": company_id,
             "jobtype_id": jobtype_id,
             "title": title,
+            "apply_by_form": apply_by_form,
             "description_html": description_html,
             **kwargs,
         }
