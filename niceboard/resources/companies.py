@@ -25,26 +25,9 @@ class Companies(Resource):
         payload = {"name": name}
 
         if kwargs.get("logo"):
-            logo_data = self._services.logo.process_logo(
-                kwargs.get("logo"), kwargs.get("site_url")
-            )
-            if logo_data:
-                payload["logo"] = logo_data
+            payload["logo"] = kwargs["logo"]
 
-        valid_fields = [
-            "site_url",
-            "twitter_handle",
-            "linkedin_url",
-            "facebook_url",
-            "tagline",
-            "description",
-            "email",
-            "password",
-        ]
-
-        payload.update(
-            {k: v for k, v in kwargs.items() if k in valid_fields and v is not None}
-        )
+        payload.update({k: v for k, v in kwargs.items() if v is not None})
 
         response = self._make_request("POST", "companies", data=payload)
         return response.json()
