@@ -33,3 +33,6 @@ markers = [
     "integration: marks tests as integration tests",
     "destructive: marks tests that modify data"
 ]
+
+[project.urls]
+Homepage = "https://github.com/workflowing/niceboard"
