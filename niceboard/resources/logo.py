@@ -14,13 +14,19 @@ class LogoService:
     def process_logo(
         self, logo_input: str, site_url: Optional[str] = None
     ) -> Optional[str]:
-        """Process logo from URL or fetch from Clearbit."""
         if not logo_input and not site_url:
             return None
 
         if logo_input:
-            if logo_input.startswith(("http://", "https://")):
+            if any(
+                logo_input.lower().endswith(ext)
+                for ext in (".png", ".jpg", ".jpeg", ".gif", ".svg")
+            ):
+                if not logo_input.startswith(("http://", "https://")):
+                    logo_input = f"https://{logo_input}"
                 return self._convert_url_to_base64(logo_input)
+            elif logo_input.startswith(("http://", "https://")) or "." in logo_input:
+                return self._get_clearbit_logo(logo_input)
             return logo_input
 
         return self._get_clearbit_logo(site_url) if site_url else None
