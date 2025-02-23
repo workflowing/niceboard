@@ -96,7 +96,7 @@ class TestUploadService:
         sample_job_data["job_type_id"] = job_types[0]["id"]
 
         # Upload job
-        result = upload_service.upload_job(sample_job_data)
+        result = upload_service.upload_job(job_data=sample_job_data)
 
         if result["success"]:
             try:
@@ -129,7 +129,7 @@ class TestUploadService:
             jobs.append(job_data)
 
         # Upload batch
-        result = upload_service.upload_jobs(jobs, batch_size=2)
+        result = upload_service.upload_jobs(jobs=jobs, batch_size=2)
 
         if result["success"]:
             try:
@@ -155,7 +155,7 @@ class TestUploadService:
         sample_job_data["job_type_id"] = job_types[0]["id"]
         sample_job_data["remote"] = True
 
-        result = upload_service.upload_job(sample_job_data)
+        result = upload_service.upload_job(job_data=sample_job_data)
 
         if result["success"]:
             job = get_job_with_retry(client, result["job"]["id"])
@@ -174,7 +174,7 @@ class TestUploadService:
         sample_job_data["job_type_id"] = job_types[0]["id"]
         sample_job_data["salary"] = "$50 per hour"
 
-        result = upload_service.upload_job(sample_job_data)
+        result = upload_service.upload_job(job_data=sample_job_data)
 
         if result["success"]:
             try:
@@ -195,7 +195,7 @@ class TestUploadService:
     ):
         """Test that uploading multiple jobs for same company reuses company profile."""
         # Upload first job
-        first_result = upload_service.upload_job(sample_job_data)
+        first_result = upload_service.upload_job(job_data=sample_job_data)
 
         if first_result["success"]:
             try:
@@ -210,7 +210,7 @@ class TestUploadService:
         # Upload second job with same company
         second_job_data = sample_job_data.copy()
         second_job_data["title"] = f"Second Test Job {datetime.now().timestamp()}"
-        second_result = upload_service.upload_job(second_job_data)
+        second_result = upload_service.upload_job(job_data=second_job_data)
         try:
             second_job = get_job_with_retry(client, second_result["job"]["id"])
             if second_job and second_job.get("company"):

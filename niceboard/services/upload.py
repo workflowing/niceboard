@@ -174,12 +174,12 @@ class NiceBoardUploadService:
         except Exception as e:
             raise ValueError(f"Failed to process job type: {str(e)}") from e
 
-    def upload_job(self, job_data: Dict[str, Any]) -> Dict[str, Any]:
+    def upload_job(self, **kwargs) -> Dict[str, Any]:
         """
         Upload a single job to NiceBoard with proper processing.
 
         Args:
-            job_data: Dictionary containing job information including:
+            **kwargs: Dictionary containing job information including:
                 - company information
                 - job details
                 - location information
@@ -189,6 +189,8 @@ class NiceBoardUploadService:
             Dictionary containing upload result and job ID
         """
         try:
+            job_data = kwargs.get("job_data", {})
+
             # Process company
             company_id = self._process_company(job_data["company"])
 
@@ -230,19 +232,21 @@ class NiceBoardUploadService:
                 "timestamp": datetime.now().isoformat(),
             }
 
-    def upload_jobs(
-        self, jobs: List[Dict[str, Any]], batch_size: int = 10
-    ) -> Dict[str, Any]:
+    def upload_jobs(self, **kwargs) -> Dict[str, Any]:
         """
         Upload multiple jobs with batching and error handling.
 
         Args:
-            jobs: List of job data dictionaries
-            batch_size: Number of jobs to process in each batch
+            **kwargs: Dictionary containing:
+                - jobs: List of job data dictionaries
+                - batch_size: Number of jobs to process in each batch
 
         Returns:
             Dictionary containing upload statistics and results
         """
+        jobs = kwargs.get("jobs", [])
+        batch_size = kwargs.get("batch_size", 10)
+
         results = {
             "total": len(jobs),
             "successful": 0,
@@ -256,7 +260,7 @@ class NiceBoardUploadService:
             batch = jobs[i : i + batch_size]
 
             for job in batch:
-                upload_result = self.upload_job(job)
+                upload_result = self.upload_job(job_data=job)
 
                 if upload_result["success"] == True:
                     results["successful"] += 1
