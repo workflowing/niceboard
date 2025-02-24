@@ -2,6 +2,10 @@
 
 A Python client for interacting with the Niceboard API.
 
+[![LICENSE](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/workflowing/niceboard/blob/main/LICENSE)
+[![PyPi](https://img.shields.io/pypi/v/niceboard)](https://pypi.org/project/niceboard/)
+[![GitHub](https://img.shields.io/badge/github-repo-blue.svg)](https://github.com/workflowing/niceboard)
+
 ## Installation
 
 ```bash
