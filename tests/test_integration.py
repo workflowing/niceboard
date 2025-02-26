@@ -1,6 +1,20 @@
 # tests/test_integration.py
 import pytest
 from pprint import pprint
+from tenacity import retry, stop_after_attempt, wait_exponential
+
+
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def get_job_with_retry(client, job_id):
+    """
+    Retry getting job details with exponential backoff.
+    Will attempt 3 times with delays of 2, 4, and 8 seconds between attempts.
+    """
+    print(f"Attempt to get job with retry {job_id}")
+    job = client.jobs.get(job_id=job_id)
+    if not job or not job.get("company"):
+        raise ValueError("Job or company details not available yet")
+    return job
 
 
 @pytest.mark.integration
@@ -38,6 +52,25 @@ class TestIntegration:
             raise
 
     @pytest.mark.integration
+    def test_get_job(self, client):
+        """Fetch and inspect a single job's response structure"""
+        try:
+            jobs = client.jobs.list()
+            if not jobs:
+                pytest.skip("No jobs available to test with")
+
+            job_id = jobs[0]["id"]
+            # Replace direct call with retry function
+            job = get_job_with_retry(client, job_id)
+
+            print("\nSingle Job Response Structure:")
+            pprint(job)
+            assert isinstance(job, dict)
+        except Exception as e:
+            print(f"\nError occurred: {str(e)}")
+            raise
+
+    @pytest.mark.integration
     @pytest.mark.destructive
     def test_create_company(self, client):
         """Create and verify a new company, then clean up"""
@@ -48,7 +81,7 @@ class TestIntegration:
                 "site_url": "https://example.com",
                 "description": "<p>Test company created by integration tests</p>",
                 "tagline": "Testing company creation",
-                "custom_fields": [{"id": "test-field", "value": "test-value"}],
+                "custom_fields": '[{"id": "test-field", "value": "test-value"}]',
             }
 
             print("\nAttempting to create company with data:")
@@ -302,6 +335,7 @@ class TestIntegration:
             print(f"\ncreated_job: {created_job} created_job_id {created_job_id}")
 
             job = client.jobs.get(job_id=created_job_id)
+            job = get_job_with_retry(client, created_job_id)
 
             print("\nSingle Job Response Structure:")
             pprint(job)

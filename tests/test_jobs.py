@@ -38,6 +38,7 @@ class TestJobs:
                         "location_name": "Greater Toronto Area, Canada",
                         "uid": "q7iNiue4IV",
                         "updated_at": "2025-01-16T02:27:01.739Z",
+                        "slug": "vp-of-finance-controls-and-finops",
                     }
                 ]
             },
@@ -170,15 +171,13 @@ class TestJobs:
         job = mock_client.jobs.get(job_id=1651824)
 
         # Assertions
-        assert job["error"] is False
-        assert job["results"]["job"]["id"] == 1651824
-        assert job["results"]["job"]["title"] == "VP of Finance - Controls & FinOps"
-        assert job["results"]["job"]["company"]["name"] == "Hopper"
-        assert job["results"]["job"]["location_name"] == "Greater Toronto Area, Canada"
-        assert job["results"]["job"]["jobtype"]["name"] == "Full time"
-        assert job["results"]["job"]["uid"] == "q7iNiue4IV"
-        assert isinstance(job["results"]["job"]["custom_fields"], dict)
-        assert job["results"]["total_count"] == 1
+        assert job["id"] == 1651824
+        assert job["title"] == "VP of Finance - Controls & FinOps"
+        assert job["company"]["name"] == "Hopper"
+        assert job["location_name"] == "Greater Toronto Area, Canada"
+        assert job["jobtype"]["name"] == "Full time"
+        assert job["uid"] == "q7iNiue4IV"
+        assert isinstance(job["custom_fields"], dict)
 
     def test_delete_job(self, mock_client, mock_session):
         response_data = {"error": False, "results": {"deleted": True}}

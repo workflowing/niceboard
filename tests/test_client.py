@@ -4,7 +4,7 @@ from niceboard import Client
 
 
 def test_client_initialization():
-    client = Client(api_key="test_key")
+    client = Client(api_key="test_key", base_url="https://base_url")
     assert client.api_key == "test_key"
     assert client.base_url == "https://base_url"
 
