@@ -29,7 +29,7 @@ class NiceBoardUploadService:
         try:
             # Check if company exists
             companies = self.client.companies.list()
-            company_name = company_data["name"].lower()
+            company_name = company_data["company_name"].lower()
 
             existing_company = next(
                 (c for c in companies if c["name"].lower() == company_name), None
@@ -40,22 +40,22 @@ class NiceBoardUploadService:
 
             # Process logo if provided
             logo = None
-            if company_data.get("logo_url"):
+            if company_data.get("company_logo_url"):
                 try:
                     logo = self.logo_service.process_logo(
-                        company_data["logo_url"], company_data.get("website")
+                        company_data["company_logo_url"], company_data.get("website")
                     )
                 except Exception as e:
                     print(f"Logo processing failed: {str(e)}")
 
             # Create new company
             company = self.client.companies.create(
-                name=company_data["name"],
-                description=company_data.get("description"),
-                site_url=company_data.get("site_url"),
+                name=company_data["company_name"],
+                description=company_data.get("company_description"),
+                site_url=company_data.get("company_site_url"),
                 logo=logo,
-                linkedin_url=company_data.get("linkedin_url"),
-                twitter_handle=company_data.get("twitter_handle"),
+                linkedin_url=company_data.get("company_linkedin_url"),
+                twitter_handle=company_data.get("company_twitter_handle"),
             )
 
             return company["results"]["company"]["id"]
@@ -196,7 +196,7 @@ class NiceBoardUploadService:
                 company_id = job_data["company_id"]
             else:
                 try:
-                    company_id = self._process_company(job_data["company"])
+                    company_id = self._process_company(job_data)
                 except Exception as e:
                     return {
                         "success": False,

@@ -12,14 +12,12 @@ from niceboard.client import Client
 def sample_job_data():
     """Fixture providing sample job data for testing."""
     return {
-        "company": {
-            "name": f"Test Company {datetime.now().timestamp()}",
-            "description": "A test company",
-            "site_url": "https://testcompany.com",
-            "logo_url": "https://yahoo.com",
-            "linkedin_url": "https://linkedin.com/company/testcompany",
-            "twitter_handle": "testcompany",
-        },
+        "company_name": f"Test Company {datetime.now().timestamp()}",
+        "company_description": "A test company",
+        "company_site_url": "https://testcompany.com",
+        "company_logo_url": "https://yahoo.com",
+        "company_linkedin_url": "https://linkedin.com/company/testcompany",
+        "company_twitter_handle": "testcompany",
         "apply_by_form": False,
         "title": f"Test Job {datetime.now().timestamp()}",
         "description_html": "<p>This is a test job posting</p>",
