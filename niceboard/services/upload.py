@@ -150,23 +150,32 @@ class NiceBoardUploadService:
         Raises:
             ValueError: If job type cannot be found or is invalid
         """
+        if not job_type:
+            raise ValueError("Job type cannot be empty")
+
         try:
-            # Get all job types from API
             job_types = self.client.job_types.list()
+            normalized_input = job_type.lower().strip()
 
-            # Normalize the input job type
-            normalized_type = job_type.lower().strip()
-
-            print(f"\n job_type {job_type}")
-
-            # Try to find exact match first
+            # Try direct match first
             for jtype in job_types:
-                if jtype["name"].lower() == normalized_type:
+                if (
+                    normalized_input == jtype["name"].lower()
+                    or normalized_input == jtype["slug"]
+                ):
                     return jtype["id"]
 
-            # Try to find partial match if exact match fails
+            # Try without special characters
+            simple_input = re.sub(r"[^a-z0-9]", "", normalized_input)
             for jtype in job_types:
-                if normalized_type in jtype["name"].lower():
+                simple_name = re.sub(r"[^a-z0-9]", "", jtype["name"].lower())
+                if simple_input == simple_name:
+                    return jtype["id"]
+
+            # Partial matching as last resort
+            for jtype in job_types:
+                simple_name = re.sub(r"[^a-z0-9]", "", jtype["name"].lower())
+                if simple_input in simple_name or simple_name in simple_input:
                     return jtype["id"]
 
             raise ValueError(f"Job type '{job_type}' not found in available types")
