@@ -176,7 +176,7 @@ class NiceBoardUploadService:
 
     def upload_job(self, **kwargs) -> Dict[str, Any]:
         """
-        Upload a single job to NiceBoard with proper processing.
+        Upload a single job to NiceBoard with proper processing and validation.
 
         Args:
             **kwargs: Dictionary containing job information including:
@@ -186,55 +186,100 @@ class NiceBoardUploadService:
                 - salary data
 
         Returns:
-            Dictionary containing upload result and job ID
+            Dictionary containing upload result and job ID, or error details
         """
         try:
             job_data = kwargs.get("job_data", {})
 
-            # Process company
-            company_id = self._process_company(job_data["company"])
+            # Process company if company_id not provided
+            if "company_id" in job_data:
+                company_id = job_data["company_id"]
+            else:
+                try:
+                    company_id = self._process_company(job_data["company"])
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "message": f"Company processing failed: {str(e)}",
+                        "timestamp": datetime.now().isoformat(),
+                        "field_error": "company",
+                    }
 
-            # Process location
-            location_id = self._process_location(job_data["location"])
+            # Process location if location_id not provided
+            if "location_id" in job_data:
+                location_id = job_data["location_id"]
+            else:
+                try:
+                    location_id = self._process_location(job_data["location"])
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "message": f"Location processing failed: {str(e)}",
+                        "timestamp": datetime.now().isoformat(),
+                        "field_error": "location",
+                    }
 
             # Process salary
-            salary_info = self._process_salary(job_data.get("salary"))
+            try:
+                salary_info = self._process_salary(job_data.get("salary"))
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Salary processing failed: {str(e)}",
+                    "timestamp": datetime.now().isoformat(),
+                    "field_error": "salary",
+                }
 
-            # Process job type
-            job_type_id = (
-                self._get_job_type_id(job_data["job_type"])
-                if "job_type" in job_data
-                else job_data["job_type_id"]
-            )
-
-            print(f"job_type_id {job_type_id}")
+            # Process job type if job_type_id not provided
+            if "job_type_id" in job_data:
+                job_type_id = job_data["job_type_id"]
+            else:
+                try:
+                    job_type_id = self._get_job_type_id(job_data["job_type"])
+                except Exception as e:
+                    return {
+                        "success": False,
+                        "message": f"Job type processing failed: {str(e)}",
+                        "timestamp": datetime.now().isoformat(),
+                        "field_error": "job_type",
+                    }
 
             # Create job
-            response = self.client.jobs.create(
-                company_id=company_id,
-                jobtype_id=job_type_id,
-                title=job_data["title"],
-                description_html=job_data["description_html"],
-                apply_by_form=job_data["apply_by_form"],
-                location_id=location_id,
-                is_remote=job_data["remote"],
-                remote_only=job_data["remote"],
-                apply_url=job_data.get("apply_url"),
-                **salary_info,
-            )
+            try:
+                response = self.client.jobs.create(
+                    company_id=company_id,
+                    jobtype_id=job_type_id,
+                    title=job_data["title"],
+                    description_html=job_data["description_html"],
+                    apply_by_form=job_data["apply_by_form"],
+                    location_id=location_id,
+                    is_remote=job_data.get("remote", False),
+                    remote_only=job_data.get("remote", False),
+                    apply_url=job_data.get("apply_url"),
+                    **salary_info,
+                )
+                return response
+            except Exception as e:
+                error_msg = str(e)
 
-            return response
+                error_response = {
+                    "success": False,
+                    "error": f"API call failed: {error_msg}",
+                    "timestamp": datetime.now().isoformat(),
+                }
+
+                return error_response
 
         except Exception as e:
             return {
-                "status": "error",
-                "error": str(e),
+                "success": False,
+                "error": f"Unexpected error: {str(e)}",
                 "timestamp": datetime.now().isoformat(),
             }
 
     def upload_jobs(self, **kwargs) -> Dict[str, Any]:
         """
-        Upload multiple jobs with batching and error handling.
+        Upload multiple jobs with batching and detailed error handling.
 
         Args:
             **kwargs: Dictionary containing:
@@ -242,7 +287,7 @@ class NiceBoardUploadService:
                 - batch_size: Number of jobs to process in each batch
 
         Returns:
-            Dictionary containing upload statistics and results
+            Dictionary containing upload statistics and detailed error results
         """
         jobs = kwargs.get("jobs", [])
         batch_size = kwargs.get("batch_size", 10)
@@ -259,20 +304,28 @@ class NiceBoardUploadService:
         for i in range(0, len(jobs), batch_size):
             batch = jobs[i : i + batch_size]
 
-            for job in batch:
+            for j, job in enumerate(batch):
                 upload_result = self.upload_job(job_data=job)
 
-                if upload_result["success"] == True:
+                # Check if the result indicates success
+                if upload_result.get("success") == True:
                     results["successful"] += 1
                     results["job_ids"].append(upload_result["job"]["id"])
                 else:
                     results["failed"] += 1
-                    results["errors"].append(
-                        {
-                            "job_title": job.get("title", "Unknown"),
-                            "error": upload_result,
-                        }
-                    )
+                    job_index = i + j  # Calculate overall job index
 
-        results["success"] = True if results["failed"] == 0 else "partial_success"
+                    upload_result["job_index"] = job_index
+                    upload_result["job_title"] = job.get("title", "Unknown")
+
+                    results["errors"].append(upload_result)
+
+        # Determine overall success status
+        if results["failed"] == 0:
+            results["success"] = True
+        elif results["successful"] > 0:
+            results["success"] = "partial_success"
+        else:
+            results["success"] = False
+
         return results
