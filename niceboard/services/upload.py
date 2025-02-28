@@ -260,7 +260,7 @@ class NiceBoardUploadService:
                     jobtype_id=job_type_id,
                     title=job_data["title"],
                     description_html=job_data["description_html"],
-                    apply_by_form=job_data["apply_by_form"],
+                    apply_by_form=job_data.get("apply_by_form", False),
                     location_id=location_id,
                     is_remote=job_data.get("remote", False),
                     remote_only=job_data.get("remote", False),
