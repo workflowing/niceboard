@@ -148,7 +148,7 @@ class NiceBoardUploadService:
             Job type ID from the API
 
         Raises:
-            ValueError: If job type cannot be found or is invalid
+            ValueError: If job type cannot be found or is invalid, includes available job types
         """
         if not job_type:
             raise ValueError("Job type cannot be empty")
@@ -156,6 +156,16 @@ class NiceBoardUploadService:
         try:
             job_types = self.client.job_types.list()
             normalized_input = job_type.lower().strip()
+
+            # Create mapping of valid job types for error message
+            valid_types = {
+                jtype["name"]: {
+                    "id": jtype["id"],
+                    "slug": jtype["slug"],
+                    "name": jtype["name"],
+                }
+                for jtype in job_types
+            }
 
             # Try direct match first
             for jtype in job_types:
@@ -178,10 +188,19 @@ class NiceBoardUploadService:
                 if simple_input in simple_name or simple_name in simple_input:
                     return jtype["id"]
 
-            raise ValueError(f"Job type '{job_type}' not found in available types")
+            # If no match found, raise error with available options
+            error_msg = {
+                "error": f"Job type '{job_type}' not found in available types",
+                "valid_job_types": valid_types,
+                "suggestion": "Please select one of the valid job types listed",
+            }
+            raise ValueError(str(error_msg))
 
         except Exception as e:
-            raise ValueError(f"Failed to process job type: {str(e)}") from e
+            if "valid_job_types" not in str(e):
+                # If it's not our custom error, wrap it
+                raise ValueError(f"Failed to process job type: {str(e)}") from e
+            raise
 
     def upload_job(self, **kwargs) -> Dict[str, Any]:
         """
@@ -240,18 +259,28 @@ class NiceBoardUploadService:
                 }
 
             # Process job type if job_type_id not provided
-            if "job_type_id" in job_data:
-                job_type_id = job_data["job_type_id"]
-            else:
-                try:
-                    job_type_id = self._get_job_type_id(job_data["job_type"])
-                except Exception as e:
+            try:
+                job_type_id = self._get_job_type_id(job_data["job_type"])
+            except Exception as e:
+                error_info = str(e)
+                # Check if it's our structured error message
+                if "valid_job_types" in error_info:
                     return {
                         "success": False,
-                        "message": f"Job type processing failed: {str(e)}",
+                        "message": "Invalid job type",
+                        "error_details": eval(
+                            error_info
+                        ),  # Convert string representation back to dict
                         "timestamp": datetime.now().isoformat(),
                         "field_error": "job_type",
+                        "needs_correction": True,
                     }
+                return {
+                    "success": False,
+                    "message": f"Job type processing failed: {str(e)}",
+                    "timestamp": datetime.now().isoformat(),
+                    "field_error": "job_type",
+                }
 
             # Create job
             try:
