@@ -1,6 +1,6 @@
 # src/niceboard/client.py
 import os
-from typing import Optional
+from typing import Union, Optional
 from requests import Session
 from .resources import Companies, Jobs, Locations, Categories, JobTypes
 
@@ -8,8 +8,8 @@ from .resources import Companies, Jobs, Locations, Categories, JobTypes
 class Client:
     def __init__(
         self,
-        api_key: str | None = os.getenv("NICEBOARD_API_KEY"),
-        base_url: str | None = os.getenv("NICEBOARD_BASE_URL"),
+        api_key: Optional[str] = os.getenv("NICEBOARD_API_KEY"),
+        base_url: Optional[str] = os.getenv("NICEBOARD_BASE_URL"),
     ):
         """
         Initialize the Niceboard client.
@@ -22,7 +22,7 @@ class Client:
             raise ValueError("api_key is required")
 
         self.api_key = api_key
-        self.base_url = base_url
+        self.base_url = base_url or "https://api.niceboard.co"
 
     @property
     def session(self) -> Session:

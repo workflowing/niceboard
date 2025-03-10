@@ -224,6 +224,9 @@ class NiceBoardSearchService:
                 page: int - Page number for pagination
                 limit: int - Results per page (max 100)
         """
+        if "query_type" not in args:
+            raise SearchError("query_type is required")
+
         filters = args.get("filters", {})
         if "page" in args:
             filters["page"] = args["page"]
@@ -231,6 +234,6 @@ class NiceBoardSearchService:
             filters["limit"] = args["limit"]
 
         return self.search(
-            query_type=args.get("query_type"),
+            query_type=args["query_type"],
             filters=filters,
         )
