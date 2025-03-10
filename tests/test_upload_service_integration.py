@@ -64,7 +64,7 @@ def client():
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def get_job_with_retry(client, job_id):
-    print(f"Attempt to get job with retry {job_id}")
+    print(f"\nAttempt to get job with retry {job_id}\n")
     job = client.jobs.get(job_id)
     if not job or not job.get("company"):
         raise ValueError("Job or company details not available yet")
