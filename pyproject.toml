@@ -31,9 +31,14 @@ dev = [
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: marks tests as integration tests",
+    "integration: marks tests as integration tests (excluded from CI)",
     "destructive: marks tests that modify data"
 ]
+# Define how to run tests in different environments
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
 
 [project.urls]
 Homepage = "https://github.com/workflowing/niceboard"

@@ -118,7 +118,7 @@ class NiceBoardUploadService:
 
         return salary_data
 
-    def _get_job_type_id(self, job_type: str) -> int:
+    def _get_jobType_id(self, job_type: str) -> int:
         if not job_type:
             raise ValueError("Job type cannot be empty")
 
@@ -174,12 +174,24 @@ class NiceBoardUploadService:
             Job ID if found, None otherwise
         """
         try:
+            # Get company and location slugs from their IDs
             company_slug = self._get_company_slug(job_data["company_id"])
             location_slug = self._get_location_slug(job_data["location_id"])
 
+            # Verify we have valid slugs before proceeding
+            if not company_slug:
+                raise ValueError(
+                    f"Could not get company slug for ID: {job_data['company_id']}"
+                )
+            if not location_slug:
+                raise ValueError(
+                    f"Could not get location slug for ID: {job_data['location_id']}"
+                )
+
+            # Use the slugs in the API call as per the API documentation
             jobs = self.client.jobs.list(
-                company=company_slug,
-                location=location_slug,
+                company=company_slug,  # Using slug instead of ID
+                location=location_slug,  # Using slug instead of ID
                 keyword=job_data["title"],
                 limit=100,
             )
@@ -267,41 +279,44 @@ class NiceBoardUploadService:
                     }
 
             # Process salary data
-            try:
-                salary_info = self._process_salary(job_data.get("salary"))
-            except Exception as e:
-                return {
-                    "success": False,
-                    "message": f"Salary processing failed: {str(e)}",
-                    "timestamp": datetime.now().isoformat(),
-                    "field_error": "salary",
-                }
-
-            # Process job type
-            try:
-                job_type_id = self._get_job_type_id(job_data["job_type"])
-            except Exception as e:
-                error_info = str(e)
-                if "valid_job_types" in error_info:
+            salary_info = {}
+            if "salary" in job_data:
+                try:
+                    salary_info = self._process_salary(job_data.get("salary"))
+                except Exception as e:
                     return {
                         "success": False,
-                        "message": "Invalid job type",
-                        "error_details": eval(error_info),
+                        "message": f"Salary processing failed: {str(e)}",
+                        "timestamp": datetime.now().isoformat(),
+                        "field_error": "salary",
+                    }
+
+            # Process job type
+            if "jobtype_id" not in job_data:
+                try:
+                    job_data["jobtype_id"] = self._get_jobType_id(job_data["job_type"])
+                except Exception as e:
+                    error_info = str(e)
+                    if "valid_job_types" in error_info:
+                        return {
+                            "success": False,
+                            "message": "Invalid job type",
+                            "error_details": eval(error_info),
+                            "timestamp": datetime.now().isoformat(),
+                            "field_error": "job_type",
+                            "needs_correction": True,
+                        }
+                    return {
+                        "success": False,
+                        "message": f"Job type processing failed: {str(e)}",
                         "timestamp": datetime.now().isoformat(),
                         "field_error": "job_type",
-                        "needs_correction": True,
                     }
-                return {
-                    "success": False,
-                    "message": f"Job type processing failed: {str(e)}",
-                    "timestamp": datetime.now().isoformat(),
-                    "field_error": "job_type",
-                }
 
             # Prepare common job parameters
             job_params = {
                 "company_id": job_data["company_id"],
-                "jobtype_id": job_type_id,
+                "jobtype_id": job_data["jobtype_id"],
                 "title": job_data["title"],
                 "description_html": job_data["description_html"],
                 "apply_by_form": job_data.get("apply_by_form", False),
@@ -322,16 +337,17 @@ class NiceBoardUploadService:
                     return {
                         "success": True,
                         "operation": "updated",
-                        "job": response.get("results", {}).get("job", {}),
+                        "job": response.get("job", {}),
                         "timestamp": datetime.now().isoformat(),
                     }
 
                 # Create new job
                 response = self.client.jobs.create(**job_params)
+
                 return {
                     "success": True,
                     "operation": "created",
-                    "job": response.get("results", {}).get("job", {}),
+                    "job": response.get("job", {}),
                     "timestamp": datetime.now().isoformat(),
                 }
 
