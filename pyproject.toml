@@ -26,7 +26,8 @@ dev = [
  "isort>=5.0",
  "mypy>=0.900",
  "flake8>=3.9",
- "types-requests>=2.25.0"
+ "types-requests>=2.25.0",
+ "twine>=4.0.0"
 ]
 
 [tool.pytest.ini_options]
