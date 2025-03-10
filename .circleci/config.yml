@@ -1,0 +1,67 @@
+version: 2.1
+orbs:
+  python: circleci/python@3.0.0
+executors:
+  default:
+    docker:
+      - image: cimg/python:3.13
+jobs:
+  isort:
+    executor: default
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip-dist
+          app-dir: .
+          pip-dependency-file: "pyproject.toml"
+      - run: pip install -e .[dev]
+      - run: isort **/*.py -c
+  mypy:
+    executor: default
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip-dist
+          app-dir: .
+          pip-dependency-file: "pyproject.toml"
+      - python/dist
+      - run: pip install mypy types-requests
+      - run: mypy niceboard --junit-xml=tmp/results.xml
+      - store_test_results:
+          path: tmp/results.xml
+  pytest:
+    executor: default
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip-dist
+          app-dir: .
+          pip-dependency-file: "pyproject.toml"
+      - python/dist
+      - run: pip install -e .[dev]
+      - run: pytest --junit-xml=tmp/results.xml
+      - store_test_results:
+          path: tmp/results.xml
+  release:
+    executor: default
+    steps:
+      - checkout
+      - python/install-packages:
+          pkg-manager: pip-dist
+          app-dir: .
+          pip-dependency-file: "pyproject.toml"
+      - python/dist
+      - run: pip install -e .[dev]
+      - run: twine upload dist/*
+workflows:
+  build:
+    jobs:
+      - isort
+      - mypy
+      - pytest
+      - release:
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
