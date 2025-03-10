@@ -39,7 +39,9 @@ jobs:
           pip-dependency-file: "pyproject.toml"
       - python/dist
       - run: pip install -e .[dev]
-      - run: pytest --junit-xml=tmp/results.xml
+      - run:
+          name: Run Unit Tests (Skip Integration Tests)
+          command: pytest -v -k "not integration" --junit-xml=tmp/results.xml
       - store_test_results:
           path: tmp/results.xml
   release:

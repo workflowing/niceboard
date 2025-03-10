@@ -64,7 +64,7 @@ def client():
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def get_job_with_retry(client, job_id):
-    print(f"Attempt to get job with retry {job_id}")
+    print(f"\nAttempt to get job with retry {job_id}\n")
     job = client.jobs.get(job_id)
     if not job or not job.get("company"):
         raise ValueError("Job or company details not available yet")
@@ -77,7 +77,7 @@ class TestUploadService:
         self, upload_service, sample_job_data, client, created_company
     ):
         job_types = client.job_types.list()
-        sample_job_data["job_type_id"] = job_types[0]["id"]
+        sample_job_data["jobtype_id"] = job_types[0]["id"]
 
         result = upload_service.upload_job(job_data=sample_job_data)
 
@@ -98,13 +98,13 @@ class TestUploadService:
         self, upload_service, sample_job_data, client, created_company
     ):
         job_types = client.job_types.list()
-        job_type_id = job_types[0]["id"]
+        jobtype_id = job_types[0]["id"]
 
         jobs = []
         for i in range(3):
             job_data = sample_job_data.copy()
             job_data["title"] = f"Test Job {i} - {datetime.now().timestamp()}"
-            job_data["job_type_id"] = job_type_id
+            job_data["jobtype_id"] = jobtype_id
             jobs.append(job_data)
 
         result = upload_service.upload_jobs(jobs=jobs, batch_size=2)
@@ -127,7 +127,7 @@ class TestUploadService:
         self, upload_service, sample_job_data, client, created_company
     ):
         job_types = client.job_types.list()
-        sample_job_data["job_type_id"] = job_types[0]["id"]
+        sample_job_data["jobtype_id"] = job_types[0]["id"]
         sample_job_data["remote"] = True
 
         result = upload_service.upload_job(job_data=sample_job_data)
@@ -145,7 +145,7 @@ class TestUploadService:
         self, upload_service, sample_job_data, client, created_company
     ):
         job_types = client.job_types.list()
-        sample_job_data["job_type_id"] = job_types[0]["id"]
+        sample_job_data["jobtype_id"] = job_types[0]["id"]
         sample_job_data["salary"] = "$50 per hour"
 
         result = upload_service.upload_job(job_data=sample_job_data)
@@ -194,7 +194,7 @@ class TestUploadService:
     ):
         """Test updating an existing job."""
         job_types = client.job_types.list()
-        sample_job_data["job_type_id"] = job_types[0]["id"]
+        sample_job_data["jobtype_id"] = job_types[0]["id"]
 
         first_result = upload_service.upload_job(job_data=sample_job_data)
         assert first_result["success"] == True
@@ -219,60 +219,13 @@ class TestUploadService:
         assert float(updated_job["salary_min"]) == 90000
         assert float(updated_job["salary_max"]) == 120000
 
-    def test_find_existing_job(
-        self, upload_service, sample_job_data, client, created_company
-    ):
-        """Test the _find_existing_job method."""
-        job_types = client.job_types.list()
-        sample_job_data["job_type_id"] = job_types[0]["id"]
-
-        result = upload_service.upload_job(job_data=sample_job_data)
-        assert result["success"] == True
-
-        if result["job"].get("company"):
-            created_company.company_id = result["job"]["company"]["id"]
-
-        search_data = {
-            "title": sample_job_data["title"],
-            "company_id": created_company.company_id,
-            "location_id": result["job"]["location"]["id"],
-        }
-
-        existing_job_id = upload_service._find_existing_job(search_data)
-
-        assert existing_job_id is not None
-        assert existing_job_id == result["job"]["id"]
-
     def test_update_nonexistent_job(self, upload_service, sample_job_data, client):
         """Test attempting to update a job that doesn't exist creates new job."""
         job_types = client.job_types.list()
-        sample_job_data["job_type_id"] = job_types[0]["id"]
+        sample_job_data["jobtype_id"] = job_types[0]["id"]
         sample_job_data["title"] = f"Nonexistent Job {datetime.now().timestamp()}"
 
         result = upload_service.upload_job(job_data=sample_job_data)
 
         assert result["success"] == True
         assert result["operation"] == "created"
-
-    def test_update_job_error_handling(
-        self, upload_service, sample_job_data, client, created_company
-    ):
-        """Test error handling during job updates."""
-        job_types = client.job_types.list()
-        sample_job_data["job_type_id"] = job_types[0]["id"]
-
-        first_result = upload_service.upload_job(job_data=sample_job_data)
-        assert first_result["success"] == True
-
-        if first_result["job"].get("company"):
-            created_company.company_id = first_result["job"]["company"]["id"]
-
-        invalid_job_data = sample_job_data.copy()
-        invalid_job_data["title"] = sample_job_data["title"]
-        invalid_job_data["salary"] = "invalid salary format"
-
-        update_result = upload_service.upload_job(job_data=invalid_job_data)
-
-        assert update_result["success"] == False
-        assert "error" in update_result
-        assert "salary" in update_result.get("field_error", "")

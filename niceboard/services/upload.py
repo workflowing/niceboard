@@ -1,7 +1,8 @@
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from functools import lru_cache
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..client import Client
 from ..exceptions import SearchError
@@ -23,18 +24,106 @@ class NiceBoardUploadService:
         self.logo_service = LogoService()
         self.geocode_service = GeocodeService()
 
-    def _process_company(self, company_data: Dict[str, Any]) -> int:
-        try:
+        # In-memory caches
+        self._companies_cache: Dict[str, int] = {}
+        self._company_slug_cache: Dict[int, str] = {}
+        self._location_cache: Dict[str, int] = {}
+        self._location_slug_cache: Dict[int, str] = {}
+        self._job_types_cache: Optional[List[Dict[str, Any]]] = None
+        self._job_type_id_cache: Dict[str, int] = {}
+
+    def _prefetch_job_types(self):
+        """Fetch and cache all job types."""
+        if self._job_types_cache is None:
+            self._job_types_cache = self.client.job_types.list()
+            # Also build the id lookup cache
+            for jtype in self._job_types_cache:
+                normalized_name = jtype["name"].lower().strip()
+                self._job_type_id_cache[normalized_name] = jtype["id"]
+                self._job_type_id_cache[jtype["slug"]] = jtype["id"]
+                # Also cache simplified versions
+                simple_name = re.sub(r"[^a-z0-9]", "", normalized_name)
+                self._job_type_id_cache[simple_name] = jtype["id"]
+
+    def _prefetch_companies(self, job_batch: List[Dict[str, Any]]):
+        """
+        Prefetch companies for the entire batch.
+
+        Args:
+            job_batch: List of job data dictionaries
+        """
+        # Only prefetch if we don't already have a full cache
+        if not self._companies_cache:
             companies = self.client.companies.list()
+            for company in companies:
+                self._companies_cache[company["name"].lower()] = company["id"]
+                self._company_slug_cache[company["id"]] = company["slug"]
+
+        # Extract unique company names from the batch that aren't in cache yet
+        company_names_to_create = set()
+        for job in job_batch:
+            if "company_id" not in job and "company_name" in job:
+                company_name = job["company_name"].lower()
+                if company_name not in self._companies_cache:
+                    company_names_to_create.add(company_name)
+
+        # We could do a bulk create companies API call here if the API supports it
+        # For now, we'll create them individually but only for those not in cache
+
+    def _batch_process_locations(self, job_batch: List[Dict[str, Any]]):
+        """
+        Process all locations in the batch to avoid repeated geocoding.
+
+        Args:
+            job_batch: List of job data dictionaries
+        """
+        # Extract unique locations from the batch
+        unique_locations = set()
+        for job in job_batch:
+            if "location_id" not in job and "location" in job and job["location"]:
+                unique_locations.add(job["location"])
+
+        # Process each unique location once
+        for location in unique_locations:
+            if location not in self._location_cache:
+                try:
+                    standardized_location = self.geocode_service.standardize_location(
+                        location
+                    )
+                    if standardized_location:
+                        location_id = self.client.locations.get_or_create(
+                            standardized_location
+                        )
+                        if location_id:
+                            self._location_cache[location] = location_id
+                            # Also fetch and cache the slug
+                            location_data = self.client.locations.get(location_id)
+                            if location_data and "slug" in location_data:
+                                self._location_slug_cache[location_id] = location_data[
+                                    "slug"
+                                ]
+                except Exception as e:
+                    print(f"Failed to process location batch {location}: {str(e)}")
+
+    def _process_company(self, company_data: Dict[str, Any]) -> int:
+        """Process a company, using cache when possible."""
+        try:
             company_name = company_data["company_name"].lower()
 
-            existing_company = next(
-                (c for c in companies if c["name"].lower() == company_name), None
-            )
+            # Check cache first
+            if company_name in self._companies_cache:
+                return self._companies_cache[company_name]
 
-            if existing_company:
-                return existing_company["id"]
+            # Slow path - check API and update cache
+            companies = self.client.companies.list()
+            for c in companies:
+                self._companies_cache[c["name"].lower()] = c["id"]
+                self._company_slug_cache[c["id"]] = c["slug"]
 
+            if company_name in self._companies_cache:
+                return self._companies_cache[company_name]
+
+            # Create new company
             logo = None
             if company_data.get("company_logo_url"):
                 try:
@@ -53,34 +142,45 @@ class NiceBoardUploadService:
                 twitter_handle=company_data.get("company_twitter_handle"),
             )
 
-            return company["results"]["company"]["id"]
+            company_id = company["results"]["company"]["id"]
+            # Update cache
+            self._companies_cache[company_name] = company_id
+            return company_id
 
         except Exception as e:
             raise ValueError(f"Failed to process company: {str(e)}") from e
 
     def _process_location(self, location: str) -> int:
+        """Process a location, using cache when possible."""
         try:
             if not location:
                 raise ValueError("No location provided")
+
+            # Check cache first
+            if location in self._location_cache:
+                return self._location_cache[location]
 
             standardized_location = self.geocode_service.standardize_location(location)
 
             if standardized_location is None:
                 raise ValueError(f"Could not standardize location: {location}")
 
-            location_result = self.client.locations.get_or_create(standardized_location)
+            location_id = self.client.locations.get_or_create(standardized_location)
 
-            if location_result is None:
+            if location_id is None:
                 raise ValueError(
                     f"Failed to get or create location for: {standardized_location}"
                 )
 
-            return location_result
+            # Update cache
+            self._location_cache[location] = location_id
+            return location_id
 
         except Exception as e:
             raise ValueError(f"Failed to process location: {str(e)}") from e
 
     def _process_salary(self, salary_text: str) -> Dict[str, Optional[float]]:
+        """Process salary information. This is fast enough and doesn't need caching."""
         salary_data: Dict[str, Optional[float]] = {
             "salary_min": None,
             "salary_max": None,
@@ -118,40 +218,49 @@ class NiceBoardUploadService:
 
         return salary_data
 
-    def _get_job_type_id(self, job_type: str) -> int:
+    def _get_jobType_id(self, job_type: str) -> int:
+        """Get job type ID with caching."""
         if not job_type:
             raise ValueError("Job type cannot be empty")
 
         try:
-            job_types = self.client.job_types.list()
+            # Ensure job types are loaded
+            self._prefetch_job_types()
+
             normalized_input = job_type.lower().strip()
 
-            valid_types = {
-                jtype["name"]: {
-                    "id": jtype["id"],
-                    "slug": jtype["slug"],
-                    "name": jtype["name"],
-                }
-                for jtype in job_types
-            }
+            # Check direct matches in cache
+            if normalized_input in self._job_type_id_cache:
+                return self._job_type_id_cache[normalized_input]
 
-            for jtype in job_types:
-                if (
-                    normalized_input == jtype["name"].lower()
-                    or normalized_input == jtype["slug"]
-                ):
-                    return jtype["id"]
-
+            # Try simplified version
             simple_input = re.sub(r"[^a-z0-9]", "", normalized_input)
-            for jtype in job_types:
-                simple_name = re.sub(r"[^a-z0-9]", "", jtype["name"].lower())
-                if simple_input == simple_name:
-                    return jtype["id"]
+            if simple_input in self._job_type_id_cache:
+                return self._job_type_id_cache[simple_input]
 
-            for jtype in job_types:
-                simple_name = re.sub(r"[^a-z0-9]", "", jtype["name"].lower())
-                if simple_input in simple_name or simple_name in simple_input:
-                    return jtype["id"]
+            # Try partial matches - only if _job_types_cache is not None
+            if self._job_types_cache is not None:
+                for jtype in self._job_types_cache:
+                    simple_name = re.sub(r"[^a-z0-9]", "", jtype["name"].lower())
+                    if simple_input in simple_name or simple_name in simple_input:
+                        self._job_type_id_cache[normalized_input] = jtype[
+                            "id"
+                        ]  # Cache the result
+                        return jtype["id"]
+
+            # Prepare error message with valid types
+            valid_types = {}
+            if self._job_types_cache is not None:
+                valid_types = {
+                    jtype["name"]: {
+                        "id": jtype["id"],
+                        "slug": jtype["slug"],
+                        "name": jtype["name"],
+                    }
+                    for jtype in self._job_types_cache
+                }
+            else:
+                valid_types = {"error": {"message": "Job types could not be loaded"}}
 
             error_msg = {
                 "error": f"Job type '{job_type}' not found in available types",
@@ -165,17 +274,148 @@ class NiceBoardUploadService:
                 raise ValueError(f"Failed to process job type: {str(e)}") from e
             raise
 
-    def _find_existing_job(self, job_data: Dict[str, Any]) -> Optional[int]:
-        """
-        Find existing job by title, company and location.
-        Args:
-            job_data: Dictionary containing job information
-        Returns:
-            Job ID if found, None otherwise
-        """
+    def _extract_job_id_from_error(
+        self, error_response: Dict[str, Any]
+    ) -> Optional[int]:
+        """Extract job ID from error response when job already exists."""
+        if isinstance(error_response, dict):
+            if (
+                error_response.get("reason") == "job_exists"
+                and "job_id" in error_response
+            ):
+                return error_response["job_id"]
+        return None
+
+    def _get_company_slug(self, company_id: int) -> Optional[str]:
+        """Get company slug with caching."""
         try:
+            # Check cache first
+            if company_id in self._company_slug_cache:
+                return self._company_slug_cache[company_id]
+
+            # Slow path - API call
+            company = self.client.companies.get(company_id)
+            if company is None:
+                return None
+
+            slug = company.get("slug")
+            # Update cache
+            if slug:
+                self._company_slug_cache[company_id] = slug
+
+            return slug
+        except Exception as e:
+            raise ValueError(f"Failed to get company slug: {str(e)}") from e
+
+    def _get_location_slug(self, location_id: int) -> Optional[str]:
+        """Get location slug with caching."""
+        try:
+            # Check cache first
+            if location_id in self._location_slug_cache:
+                return self._location_slug_cache[location_id]
+
+            # Slow path - API call
+            location = self.client.locations.get(location_id)
+            if location is None:
+                return None
+
+            slug = location.get("slug")
+            # Update cache
+            if slug:
+                self._location_slug_cache[location_id] = slug
+
+            return slug
+        except Exception as e:
+            raise ValueError(f"Failed to get location slug: {str(e)}") from e
+
+    def _batch_find_existing_jobs(
+        self, job_batch: List[Dict[str, Any]]
+    ) -> Dict[Tuple[int, int, str], int]:
+        """
+        Find existing jobs in batch to minimize API calls.
+
+        Args:
+            job_batch: List of job data dictionaries
+
+        Returns:
+            Dictionary mapping (company_id, location_id, title) tuples to job_id
+        """
+        existing_jobs = {}
+
+        # Group jobs by company and location to minimize API calls
+        company_location_groups: Dict[
+            Tuple[int, int], List[Tuple[int, Dict[str, Any]]]
+        ] = {}
+
+        for i, job in enumerate(job_batch):
+            if all(k in job for k in ["company_id", "location_id", "title"]):
+                key = (job["company_id"], job["location_id"])
+                if key not in company_location_groups:
+                    company_location_groups[key] = []
+                company_location_groups[key].append((i, job))
+
+        # For each company/location pair, make a single API call
+        for (company_id, location_id), jobs in company_location_groups.items():
+            try:
+                # Get slugs (using cached values if available)
+                company_slug = self._get_company_slug(company_id)
+                location_slug = self._get_location_slug(location_id)
+
+                if not company_slug or not location_slug:
+                    continue
+
+                # Get all jobs for this company/location pair
+                api_jobs = self.client.jobs.list(
+                    company=company_slug,
+                    location=location_slug,
+                    limit=100,
+                )
+
+                # Create lookup dictionary
+                job_dict = {job["title"].lower().strip(): job["id"] for job in api_jobs}
+
+                # Check each job in this group
+                for _, job in jobs:
+                    normalized_title = job["title"].lower().strip()
+                    if normalized_title in job_dict:
+                        existing_jobs[(company_id, location_id, normalized_title)] = (
+                            job_dict[normalized_title]
+                        )
+            except Exception as e:
+                print(
+                    f"Error finding existing jobs for company {company_id}, location {location_id}: {str(e)}"
+                )
+
+        return existing_jobs
+
+    def _find_existing_job(self, job_data: Dict[str, Any]) -> Optional[int]:
+        """Find existing job, using the batch results if available."""
+        try:
+            key = (
+                job_data["company_id"],
+                job_data["location_id"],
+                job_data["title"].lower().strip(),
+            )
+
+            # Check if we have a batch result
+            if (
+                hasattr(self, "_batch_existing_jobs")
+                and key in self._batch_existing_jobs
+            ):
+                return self._batch_existing_jobs[key]
+
+            # Fall back to individual lookup
             company_slug = self._get_company_slug(job_data["company_id"])
             location_slug = self._get_location_slug(job_data["location_id"])
+
+            if not company_slug:
+                raise ValueError(
+                    f"Could not get company slug for ID: {job_data['company_id']}"
+                )
+            if not location_slug:
+                raise ValueError(
+                    f"Could not get location slug for ID: {job_data['location_id']}"
+                )
 
             jobs = self.client.jobs.list(
                 company=company_slug,
@@ -194,44 +434,6 @@ class NiceBoardUploadService:
         except Exception as e:
             raise ValueError(f"Failed to search for existing job: {str(e)}") from e
 
-    def _extract_job_id_from_error(
-        self, error_response: Dict[str, Any]
-    ) -> Optional[int]:
-        """Extract job ID from error response when job already exists."""
-        if isinstance(error_response, dict):
-            if (
-                error_response.get("reason") == "job_exists"
-                and "job_id" in error_response
-            ):
-                return error_response["job_id"]
-        return None
-
-    def _get_company_slug(self, company_id: int) -> Optional[str]:
-        """Helper method to get company slug from ID."""
-        try:
-            company = self.client.companies.get(company_id)
-
-            # Add null check before calling .get() method
-            if company is None:
-                return None
-
-            return company.get("slug")
-        except Exception as e:
-            raise ValueError(f"Failed to get company slug: {str(e)}") from e
-
-    def _get_location_slug(self, location_id: int) -> Optional[str]:
-        """Helper method to get location slug from ID."""
-        try:
-            location = self.client.locations.get(location_id)
-
-            # Add null check before calling .get() method
-            if location is None:
-                return None
-
-            return location.get("slug")
-        except Exception as e:
-            raise ValueError(f"Failed to get location slug: {str(e)}") from e
-
     def upload_job(self, **kwargs) -> Dict[str, Any]:
         """
         Upload a single job to NiceBoard with proper processing and validation.
@@ -239,6 +441,7 @@ class NiceBoardUploadService:
         """
         try:
             job_data = kwargs.get("job_data", {})
+            batch_mode = kwargs.get("batch_mode", False)
 
             # Process company data
             if "company_id" not in job_data:
@@ -267,41 +470,44 @@ class NiceBoardUploadService:
                     }
 
             # Process salary data
-            try:
-                salary_info = self._process_salary(job_data.get("salary"))
-            except Exception as e:
-                return {
-                    "success": False,
-                    "message": f"Salary processing failed: {str(e)}",
-                    "timestamp": datetime.now().isoformat(),
-                    "field_error": "salary",
-                }
-
-            # Process job type
-            try:
-                job_type_id = self._get_job_type_id(job_data["job_type"])
-            except Exception as e:
-                error_info = str(e)
-                if "valid_job_types" in error_info:
+            salary_info = {}
+            if "salary" in job_data:
+                try:
+                    salary_info = self._process_salary(job_data.get("salary"))
+                except Exception as e:
                     return {
                         "success": False,
-                        "message": "Invalid job type",
-                        "error_details": eval(error_info),
+                        "message": f"Salary processing failed: {str(e)}",
+                        "timestamp": datetime.now().isoformat(),
+                        "field_error": "salary",
+                    }
+
+            # Process job type
+            if "jobtype_id" not in job_data:
+                try:
+                    job_data["jobtype_id"] = self._get_jobType_id(job_data["job_type"])
+                except Exception as e:
+                    error_info = str(e)
+                    if "valid_job_types" in error_info:
+                        return {
+                            "success": False,
+                            "message": "Invalid job type",
+                            "error_details": eval(error_info),
+                            "timestamp": datetime.now().isoformat(),
+                            "field_error": "job_type",
+                            "needs_correction": True,
+                        }
+                    return {
+                        "success": False,
+                        "message": f"Job type processing failed: {str(e)}",
                         "timestamp": datetime.now().isoformat(),
                         "field_error": "job_type",
-                        "needs_correction": True,
                     }
-                return {
-                    "success": False,
-                    "message": f"Job type processing failed: {str(e)}",
-                    "timestamp": datetime.now().isoformat(),
-                    "field_error": "job_type",
-                }
 
             # Prepare common job parameters
             job_params = {
                 "company_id": job_data["company_id"],
-                "jobtype_id": job_type_id,
+                "jobtype_id": job_data["jobtype_id"],
                 "title": job_data["title"],
                 "description_html": job_data["description_html"],
                 "apply_by_form": job_data.get("apply_by_form", False),
@@ -314,7 +520,17 @@ class NiceBoardUploadService:
 
             # First check if job exists
             try:
-                existing_job_id = self._find_existing_job(job_data)
+                # In batch mode, use the pre-computed results
+                existing_job_id = None
+                if batch_mode and hasattr(self, "_batch_existing_jobs"):
+                    key = (
+                        job_data["company_id"],
+                        job_data["location_id"],
+                        job_data["title"].lower().strip(),
+                    )
+                    existing_job_id = self._batch_existing_jobs.get(key)
+                else:
+                    existing_job_id = self._find_existing_job(job_data)
 
                 # Update existing job
                 if existing_job_id:
@@ -322,16 +538,41 @@ class NiceBoardUploadService:
                     return {
                         "success": True,
                         "operation": "updated",
-                        "job": response.get("results", {}).get("job", {}),
+                        "job": response.get("job", {}),
                         "timestamp": datetime.now().isoformat(),
                     }
 
-                # Create new job
-                response = self.client.jobs.create(**job_params)
+                # Create new job - with error handling for "job already exists"
+                try:
+                    response = self.client.jobs.create(**job_params)
+                except Exception as api_error:
+                    # Check if the error is because the job already exists
+                    error_response = getattr(api_error, "response", None)
+                    if error_response:
+                        # Try to parse JSON from error response
+                        try:
+                            error_data = error_response.json()
+                            existing_id = self._extract_job_id_from_error(error_data)
+                            if existing_id:
+                                # Update instead of create
+                                response = self.client.jobs.update(
+                                    existing_id, **job_params
+                                )
+                                return {
+                                    "success": True,
+                                    "operation": "updated",
+                                    "job": response.get("job", {}),
+                                    "timestamp": datetime.now().isoformat(),
+                                }
+                        except Exception:
+                            pass
+                    # Re-raise if we couldn't handle the error
+                    raise
+
                 return {
                     "success": True,
                     "operation": "created",
-                    "job": response.get("results", {}).get("job", {}),
+                    "job": response.get("job", {}),
                     "timestamp": datetime.now().isoformat(),
                 }
 
@@ -351,7 +592,7 @@ class NiceBoardUploadService:
 
     def upload_jobs(self, **kwargs) -> Dict[str, Any]:
         """
-        Upload multiple jobs with batching and detailed error handling.
+        Upload multiple jobs with batching and optimized processing.
 
         Args:
             **kwargs: Dictionary containing:
@@ -377,8 +618,16 @@ class NiceBoardUploadService:
         for i in range(0, len(jobs), batch_size):
             batch = jobs[i : i + batch_size]
 
+            # Prefetch data for the entire batch
+            self._prefetch_job_types()
+            self._prefetch_companies(batch)
+            self._batch_process_locations(batch)
+
+            # Find existing jobs in batch to minimize API calls
+            self._batch_existing_jobs = self._batch_find_existing_jobs(batch)
+
             for j, job in enumerate(batch):
-                upload_result = self.upload_job(job_data=job)
+                upload_result = self.upload_job(job_data=job, batch_mode=True)
 
                 if upload_result.get("success") is True:
                     results["successful"] += 1
@@ -393,6 +642,10 @@ class NiceBoardUploadService:
                     error_info["job_index"] = job_index
                     error_info["job_title"] = job.get("title", "Unknown")
                     results["errors"].append(error_info)
+
+            # Clear the batch-specific cache
+            if hasattr(self, "_batch_existing_jobs"):
+                delattr(self, "_batch_existing_jobs")
 
         if results["failed"] == 0:
             results["success"] = True

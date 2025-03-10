@@ -92,6 +92,9 @@ pytest -v
 # Run only integration tests
 pytest -v -m "integration"
 
+# Run only non-integration tests (what CI will run)
+pytest -v -k "not integration"
+
 # Run with print statement output
 pytest -v -s
 
@@ -112,10 +115,32 @@ pytest tests/test_services_integration.py::TestSearchService::test_search_jobs_b
 | Error Handling | Tests invalid inputs and error conditions | Invalid fields, query types       |
 | Pagination     | Tests result pagination                   | Page limits, result consistency   |
 
+### CI/CD Testing Setup
+
+Our CI pipeline is configured to:
+
+1. Run all unit tests but skip integration tests
+2. This is achieved using the `-k "not integration"` flag in pytest
+3. Integration tests should only be run locally or in environments with proper API keys
+
+### Helper Scripts
+
+The repository includes helper scripts for testing:
+
+```bash
+# Check test coverage excluding integration tests
+./scripts/check_coverage.sh
+
+# Run only integration tests (requires API keys)
+./scripts/run_integration_tests.sh
+```
+
 ### Best Practices
 
 1. Always run unit tests during development
-2. Run integration tests before committing changes
+2. Run integration tests before committing changes that affect API interaction
 3. Use environment variables for configuration
 4. Handle rate limits and API quotas appropriately
 5. Use `-s` flag to see print outputs for debugging
+6. Mark integration tests with `@pytest.mark.integration` decorator
+7. Mark destructive tests with `@pytest.mark.destructive` decorator
