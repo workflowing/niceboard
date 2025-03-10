@@ -1,11 +1,12 @@
 import os
 import re
-from typing import Dict, Any, Optional, List
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from ..client import Client
 from ..exceptions import SearchError
-from ..resources.logo import LogoService
 from ..resources.geocoding import GeocodeService
+from ..resources.logo import LogoService
 
 
 class NiceBoardUploadService:

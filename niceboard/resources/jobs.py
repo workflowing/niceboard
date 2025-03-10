@@ -1,7 +1,8 @@
 # src/niceboard/resources/jobs.py
-from typing import Dict, Any, List, Optional
-from ..resource import Resource
 import json
+from typing import Any, Dict, List, Optional
+
+from ..resource import Resource
 
 
 class Jobs(Resource):

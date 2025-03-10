@@ -1,7 +1,9 @@
 # tests/conftest.py
 import os
+
 import pytest
 from dotenv import load_dotenv
+
 from niceboard import Client
 
 load_dotenv()

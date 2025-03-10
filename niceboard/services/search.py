@@ -1,7 +1,7 @@
 import os
-from typing import Dict, Any, Optional, List, Set
-from datetime import datetime
 from collections import Counter
+from datetime import datetime
+from typing import Any, Dict, List, Optional, Set
 
 from ..client import Client
 from ..exceptions import SearchError

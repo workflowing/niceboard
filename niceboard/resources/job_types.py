@@ -1,5 +1,6 @@
 # src/niceboard/resources/job_types.py
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from ..resource import Resource
 
 

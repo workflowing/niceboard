@@ -1,8 +1,10 @@
 # src/niceboard/client.py
 import os
-from typing import Union, Optional
+from typing import Optional, Union
+
 from requests import Session
-from .resources import Companies, Jobs, Locations, Categories, JobTypes
+
+from .resources import Categories, Companies, Jobs, JobTypes, Locations
 
 
 class Client:
