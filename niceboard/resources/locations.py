@@ -1,5 +1,6 @@
 # src/niceboard/resources/locations.py
-from typing import Dict, Any, Optional, List
+from typing import Any, Dict, List, Optional
+
 from ..resource import Resource
 from .geocoding import GeocodeService
 

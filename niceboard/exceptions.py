@@ -1,13 +1,12 @@
 class SearchError(Exception):
     """
     Exception raised when a NiceBoard search operation fails.
-
     Attributes:
-        message -- explanation of the error
-        cause -- the original exception that caused this error (optional)
+    message -- explanation of the error
+    cause -- the original exception that caused this error (optional)
     """
 
-    def __init__(self, message: str, cause: Exception = None):
+    def __init__(self, message: str, cause: Exception | None = None):
         self.message = message
         self.cause = cause
         super().__init__(self.message)

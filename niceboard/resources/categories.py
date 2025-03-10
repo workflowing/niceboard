@@ -1,5 +1,6 @@
 # src/niceboard/resources/categories.py
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from ..resource import Resource
 
 

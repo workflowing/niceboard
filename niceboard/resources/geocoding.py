@@ -1,9 +1,10 @@
 # src/niceboard/utils/geocoding.py
 import logging
-from typing import Optional
 from functools import lru_cache
-from geopy.geocoders import Nominatim
+from typing import Optional
+
 from geopy.exc import GeocoderTimedOut
+from geopy.geocoders import Nominatim
 
 
 class GeocodeService:

@@ -1,6 +1,7 @@
 # tests/test_integration.py
-import pytest
 from pprint import pprint
+
+import pytest
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 

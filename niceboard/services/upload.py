@@ -1,16 +1,15 @@
 import os
 import re
-from typing import Dict, Any, Optional, List
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
 from ..client import Client
 from ..exceptions import SearchError
-from ..resources.logo import LogoService
 from ..resources.geocoding import GeocodeService
+from ..resources.logo import LogoService
 
 
 class NiceBoardUploadService:
-    """Service for uploading jobs to NiceBoard with proper processing and validation."""
-
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None):
         self.api_key = api_key or os.getenv("NICEBOARD_API_KEY")
         self.base_url = base_url or os.getenv("NICEBOARD_BASE_URL")
@@ -25,9 +24,7 @@ class NiceBoardUploadService:
         self.geocode_service = GeocodeService()
 
     def _process_company(self, company_data: Dict[str, Any]) -> int:
-        """Process company data and return company ID."""
         try:
-            # Check if company exists
             companies = self.client.companies.list()
             company_name = company_data["company_name"].lower()
 
@@ -38,7 +35,6 @@ class NiceBoardUploadService:
             if existing_company:
                 return existing_company["id"]
 
-            # Process logo if provided
             logo = None
             if company_data.get("company_logo_url"):
                 try:
@@ -48,7 +44,6 @@ class NiceBoardUploadService:
                 except Exception as e:
                     print(f"Logo processing failed: {str(e)}")
 
-            # Create new company
             company = self.client.companies.create(
                 name=company_data["company_name"],
                 description=company_data.get("company_description"),
@@ -64,41 +59,32 @@ class NiceBoardUploadService:
             raise ValueError(f"Failed to process company: {str(e)}") from e
 
     def _process_location(self, location: str) -> int:
-        """
-        Process location string and return location ID.
-
-        Args:
-            location: String representing the location (city, state or full address)
-
-        Returns:
-            Location ID from the API
-        """
         try:
             if not location:
                 raise ValueError("No location provided")
 
-            # Standardize location string
             standardized_location = self.geocode_service.standardize_location(location)
 
-            # Get or create location
+            if standardized_location is None:
+                raise ValueError(f"Could not standardize location: {location}")
+
             location_result = self.client.locations.get_or_create(standardized_location)
+
+            if location_result is None:
+                raise ValueError(
+                    f"Failed to get or create location for: {standardized_location}"
+                )
 
             return location_result
 
         except Exception as e:
             raise ValueError(f"Failed to process location: {str(e)}") from e
 
-    def _process_salary(self, salary_text: str) -> Dict[str, Any]:
-        """Process salary information with standardized parsing.
-
-        Args:
-            salary_text: Raw salary text from job listing (e.g. "$80,000 - $100,000 per year", "$40/hour")
-
-        Returns:
-            Dict containing standardized salary_min and salary_max values converted to annual amounts
-        """
-        salary_data = {"salary_min": None, "salary_max": None}
-
+    def _process_salary(self, salary_text: str) -> Dict[str, Optional[float]]:
+        salary_data: Dict[str, Optional[float]] = {
+            "salary_min": None,
+            "salary_max": None,
+        }
         if not salary_text:
             return salary_data
 
@@ -106,28 +92,23 @@ class NiceBoardUploadService:
             text = salary_text.lower().strip()
 
             def parse_amount(value: str) -> float:
-                """Extract numeric value from string."""
                 return float(re.sub(r"[^\d.]", "", value))
 
             def get_multiplier(text: str) -> float:
-                """Get multiplier to convert to annual salary."""
                 if "hour" in text:
-                    return 2080  # 40 hours * 52 weeks
+                    return 2080
                 elif "month" in text:
                     return 12
-                return 1  # already yearly
+                return 1
 
             multiplier = get_multiplier(text)
 
-            # Extract all numbers from text
             numbers = re.findall(r"[\d,.]+", text)
 
             if len(numbers) >= 2:
-                # Handle range (e.g. "$50,000 - $70,000")
                 salary_data["salary_min"] = parse_amount(numbers[0]) * multiplier
                 salary_data["salary_max"] = parse_amount(numbers[1]) * multiplier
             elif len(numbers) == 1:
-                # Handle single value
                 amount = parse_amount(numbers[0]) * multiplier
                 salary_data["salary_min"] = amount
                 salary_data["salary_max"] = amount
@@ -138,18 +119,6 @@ class NiceBoardUploadService:
         return salary_data
 
     def _get_job_type_id(self, job_type: str) -> int:
-        """
-        Get job type ID from string representation.
-
-        Args:
-            job_type: String representation of job type (e.g. "full time", "part time")
-
-        Returns:
-            Job type ID from the API
-
-        Raises:
-            ValueError: If job type cannot be found or is invalid, includes available job types
-        """
         if not job_type:
             raise ValueError("Job type cannot be empty")
 
@@ -157,7 +126,6 @@ class NiceBoardUploadService:
             job_types = self.client.job_types.list()
             normalized_input = job_type.lower().strip()
 
-            # Create mapping of valid job types for error message
             valid_types = {
                 jtype["name"]: {
                     "id": jtype["id"],
@@ -167,7 +135,6 @@ class NiceBoardUploadService:
                 for jtype in job_types
             }
 
-            # Try direct match first
             for jtype in job_types:
                 if (
                     normalized_input == jtype["name"].lower()
@@ -175,20 +142,17 @@ class NiceBoardUploadService:
                 ):
                     return jtype["id"]
 
-            # Try without special characters
             simple_input = re.sub(r"[^a-z0-9]", "", normalized_input)
             for jtype in job_types:
                 simple_name = re.sub(r"[^a-z0-9]", "", jtype["name"].lower())
                 if simple_input == simple_name:
                     return jtype["id"]
 
-            # Partial matching as last resort
             for jtype in job_types:
                 simple_name = re.sub(r"[^a-z0-9]", "", jtype["name"].lower())
                 if simple_input in simple_name or simple_name in simple_input:
                     return jtype["id"]
 
-            # If no match found, raise error with available options
             error_msg = {
                 "error": f"Job type '{job_type}' not found in available types",
                 "valid_job_types": valid_types,
@@ -198,33 +162,88 @@ class NiceBoardUploadService:
 
         except Exception as e:
             if "valid_job_types" not in str(e):
-                # If it's not our custom error, wrap it
                 raise ValueError(f"Failed to process job type: {str(e)}") from e
             raise
+
+    def _find_existing_job(self, job_data: Dict[str, Any]) -> Optional[int]:
+        """
+        Find existing job by title, company and location.
+        Args:
+            job_data: Dictionary containing job information
+        Returns:
+            Job ID if found, None otherwise
+        """
+        try:
+            company_slug = self._get_company_slug(job_data["company_id"])
+            location_slug = self._get_location_slug(job_data["location_id"])
+
+            jobs = self.client.jobs.list(
+                company=company_slug,
+                location=location_slug,
+                keyword=job_data["title"],
+                limit=100,
+            )
+
+            normalized_title = job_data["title"].lower().strip()
+            for job in jobs:
+                if job["title"].lower().strip() == normalized_title:
+                    return job["id"]
+
+            return None
+
+        except Exception as e:
+            raise ValueError(f"Failed to search for existing job: {str(e)}") from e
+
+    def _extract_job_id_from_error(
+        self, error_response: Dict[str, Any]
+    ) -> Optional[int]:
+        """Extract job ID from error response when job already exists."""
+        if isinstance(error_response, dict):
+            if (
+                error_response.get("reason") == "job_exists"
+                and "job_id" in error_response
+            ):
+                return error_response["job_id"]
+        return None
+
+    def _get_company_slug(self, company_id: int) -> Optional[str]:
+        """Helper method to get company slug from ID."""
+        try:
+            company = self.client.companies.get(company_id)
+
+            # Add null check before calling .get() method
+            if company is None:
+                return None
+
+            return company.get("slug")
+        except Exception as e:
+            raise ValueError(f"Failed to get company slug: {str(e)}") from e
+
+    def _get_location_slug(self, location_id: int) -> Optional[str]:
+        """Helper method to get location slug from ID."""
+        try:
+            location = self.client.locations.get(location_id)
+
+            # Add null check before calling .get() method
+            if location is None:
+                return None
+
+            return location.get("slug")
+        except Exception as e:
+            raise ValueError(f"Failed to get location slug: {str(e)}") from e
 
     def upload_job(self, **kwargs) -> Dict[str, Any]:
         """
         Upload a single job to NiceBoard with proper processing and validation.
-
-        Args:
-            **kwargs: Dictionary containing job information including:
-                - company information
-                - job details
-                - location information
-                - salary data
-
-        Returns:
-            Dictionary containing upload result and job ID, or error details
+        Will update the job if it already exists.
         """
         try:
             job_data = kwargs.get("job_data", {})
 
-            # Process company if company_id not provided
-            if "company_id" in job_data:
-                company_id = job_data["company_id"]
-            else:
+            # Process company data
+            if "company_id" not in job_data:
                 try:
-                    company_id = self._process_company(job_data)
+                    job_data["company_id"] = self._process_company(job_data)
                 except Exception as e:
                     return {
                         "success": False,
@@ -233,12 +252,12 @@ class NiceBoardUploadService:
                         "field_error": "company",
                     }
 
-            # Process location if location_id not provided
-            if "location_id" in job_data:
-                location_id = job_data["location_id"]
-            else:
+            # Process location data
+            if "location_id" not in job_data:
                 try:
-                    location_id = self._process_location(job_data["location"])
+                    job_data["location_id"] = self._process_location(
+                        job_data["location"]
+                    )
                 except Exception as e:
                     return {
                         "success": False,
@@ -247,30 +266,27 @@ class NiceBoardUploadService:
                         "field_error": "location",
                     }
 
-            # Process salary
+            # Process salary data
             try:
                 salary_info = self._process_salary(job_data.get("salary"))
             except Exception as e:
                 return {
                     "success": False,
-                    "error": f"Salary processing failed: {str(e)}",
+                    "message": f"Salary processing failed: {str(e)}",
                     "timestamp": datetime.now().isoformat(),
                     "field_error": "salary",
                 }
 
-            # Process job type if job_type_id not provided
+            # Process job type
             try:
                 job_type_id = self._get_job_type_id(job_data["job_type"])
             except Exception as e:
                 error_info = str(e)
-                # Check if it's our structured error message
                 if "valid_job_types" in error_info:
                     return {
                         "success": False,
                         "message": "Invalid job type",
-                        "error_details": eval(
-                            error_info
-                        ),  # Convert string representation back to dict
+                        "error_details": eval(error_info),
                         "timestamp": datetime.now().isoformat(),
                         "field_error": "job_type",
                         "needs_correction": True,
@@ -282,36 +298,54 @@ class NiceBoardUploadService:
                     "field_error": "job_type",
                 }
 
-            # Create job
-            try:
-                response = self.client.jobs.create(
-                    company_id=company_id,
-                    jobtype_id=job_type_id,
-                    title=job_data["title"],
-                    description_html=job_data["description_html"],
-                    apply_by_form=job_data.get("apply_by_form", False),
-                    location_id=location_id,
-                    is_remote=job_data.get("remote", False),
-                    remote_only=job_data.get("remote", False),
-                    apply_url=job_data.get("apply_url"),
-                    **salary_info,
-                )
-                return response
-            except Exception as e:
-                error_msg = str(e)
+            # Prepare common job parameters
+            job_params = {
+                "company_id": job_data["company_id"],
+                "jobtype_id": job_type_id,
+                "title": job_data["title"],
+                "description_html": job_data["description_html"],
+                "apply_by_form": job_data.get("apply_by_form", False),
+                "location_id": job_data["location_id"],
+                "is_remote": job_data.get("remote", False),
+                "remote_only": job_data.get("remote", False),
+                "apply_url": job_data.get("apply_url"),
+                **salary_info,
+            }
 
-                error_response = {
-                    "success": False,
-                    "error": f"API call failed: {error_msg}",
+            # First check if job exists
+            try:
+                existing_job_id = self._find_existing_job(job_data)
+
+                # Update existing job
+                if existing_job_id:
+                    response = self.client.jobs.update(existing_job_id, **job_params)
+                    return {
+                        "success": True,
+                        "operation": "updated",
+                        "job": response.get("results", {}).get("job", {}),
+                        "timestamp": datetime.now().isoformat(),
+                    }
+
+                # Create new job
+                response = self.client.jobs.create(**job_params)
+                return {
+                    "success": True,
+                    "operation": "created",
+                    "job": response.get("results", {}).get("job", {}),
                     "timestamp": datetime.now().isoformat(),
                 }
 
-                return error_response
+            except Exception as e:
+                return {
+                    "success": False,
+                    "message": f"API call failed: {str(e)}",
+                    "timestamp": datetime.now().isoformat(),
+                }
 
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Unexpected error: {str(e)}",
+                "message": f"Unexpected error: {str(e)}",
                 "timestamp": datetime.now().isoformat(),
             }
 
@@ -330,7 +364,8 @@ class NiceBoardUploadService:
         jobs = kwargs.get("jobs", [])
         batch_size = kwargs.get("batch_size", 10)
 
-        results = {
+        # Initialize results with proper types
+        results: Dict[str, Any] = {
             "total": len(jobs),
             "successful": 0,
             "failed": 0,
@@ -345,20 +380,20 @@ class NiceBoardUploadService:
             for j, job in enumerate(batch):
                 upload_result = self.upload_job(job_data=job)
 
-                # Check if the result indicates success
-                if upload_result.get("success") == True:
+                if upload_result.get("success") is True:
                     results["successful"] += 1
-                    results["job_ids"].append(upload_result["job"]["id"])
+
+                    job_id = upload_result.get("job", {}).get("id")
+                    if job_id is not None:
+                        results["job_ids"].append(job_id)
                 else:
                     results["failed"] += 1
-                    job_index = i + j  # Calculate overall job index
+                    job_index = i + j
+                    error_info = upload_result.copy()
+                    error_info["job_index"] = job_index
+                    error_info["job_title"] = job.get("title", "Unknown")
+                    results["errors"].append(error_info)
 
-                    upload_result["job_index"] = job_index
-                    upload_result["job_title"] = job.get("title", "Unknown")
-
-                    results["errors"].append(upload_result)
-
-        # Determine overall success status
         if results["failed"] == 0:
             results["success"] = True
         elif results["successful"] > 0:

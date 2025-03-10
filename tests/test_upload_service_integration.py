@@ -1,16 +1,16 @@
 import os
-import pytest
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
+
+import pytest
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from niceboard.services.upload import NiceBoardUploadService
 from niceboard.client import Client
+from niceboard.services.upload import NiceBoardUploadService
 
 
 @pytest.fixture
 def sample_job_data():
-    """Fixture providing sample job data for testing."""
     return {
         "company_name": f"Test Company {datetime.now().timestamp()}",
         "company_description": "A test company",
@@ -31,10 +31,6 @@ def sample_job_data():
 
 @pytest.fixture
 def created_company(client):
-    """
-    Fixture that yields None initially and handles company cleanup after test.
-    The test should set the company_id on the fixture for cleanup.
-    """
     company_id = None
 
     class CompanyContext:
@@ -50,7 +46,6 @@ def created_company(client):
 
 @pytest.fixture
 def upload_service():
-    """Fixture for upload service with API key from environment."""
     api_key = os.getenv("NICEBOARD_API_KEY")
     base_url = os.getenv("NICEBOARD_BASE_URL")
     if not api_key:
@@ -60,7 +55,6 @@ def upload_service():
 
 @pytest.fixture
 def client():
-    """Fixture for NiceBoard client for cleanup operations."""
     api_key = os.getenv("NICEBOARD_API_KEY")
     base_url = os.getenv("NICEBOARD_BASE_URL")
     if not api_key:
@@ -70,10 +64,6 @@ def client():
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def get_job_with_retry(client, job_id):
-    """
-    Retry getting job details with exponential backoff.
-    Will attempt 3 times with delays of 2, 4, and 8 seconds between attempts.
-    """
     print(f"Attempt to get job with retry {job_id}")
     job = client.jobs.get(job_id)
     if not job or not job.get("company"):
@@ -83,17 +73,12 @@ def get_job_with_retry(client, job_id):
 
 @pytest.mark.integration
 class TestUploadService:
-    """Integration tests for NiceBoardUploadService."""
-
     def test_upload_single_job(
         self, upload_service, sample_job_data, client, created_company
     ):
-        """Test uploading a single job."""
-        # First get a valid job type ID
         job_types = client.job_types.list()
         sample_job_data["job_type_id"] = job_types[0]["id"]
 
-        # Upload job
         result = upload_service.upload_job(job_data=sample_job_data)
 
         if result["success"]:
@@ -105,8 +90,6 @@ class TestUploadService:
                 pytest.fail(
                     f"Failed to get job details after multiple retries: {str(e)}"
                 )
-
-        # Verify upload success
         assert result["success"] == True
         assert "job" in result
         assert "id" in result["job"]
@@ -114,11 +97,9 @@ class TestUploadService:
     def test_upload_batch_jobs(
         self, upload_service, sample_job_data, client, created_company
     ):
-        """Test uploading multiple jobs in batch."""
         job_types = client.job_types.list()
         job_type_id = job_types[0]["id"]
 
-        # Create multiple job data entries
         jobs = []
         for i in range(3):
             job_data = sample_job_data.copy()
@@ -126,7 +107,6 @@ class TestUploadService:
             job_data["job_type_id"] = job_type_id
             jobs.append(job_data)
 
-        # Upload batch
         result = upload_service.upload_jobs(jobs=jobs, batch_size=2)
 
         if result["success"]:
@@ -138,8 +118,6 @@ class TestUploadService:
                 pytest.fail(
                     f"Failed to get job details after multiple retries: {str(e)}"
                 )
-
-        # Verify batch upload results
         assert result["success"] == True
         assert result["total"] == 3
         assert result["successful"] == 3
@@ -148,7 +126,6 @@ class TestUploadService:
     def test_upload_job_with_remote_location(
         self, upload_service, sample_job_data, client, created_company
     ):
-        """Test uploading a remote job."""
         job_types = client.job_types.list()
         sample_job_data["job_type_id"] = job_types[0]["id"]
         sample_job_data["remote"] = True
@@ -167,7 +144,6 @@ class TestUploadService:
     def test_upload_job_with_salary_conversion(
         self, upload_service, sample_job_data, client, created_company
     ):
-        """Test uploading a job with hourly salary conversion."""
         job_types = client.job_types.list()
         sample_job_data["job_type_id"] = job_types[0]["id"]
         sample_job_data["salary"] = "$50 per hour"
@@ -183,7 +159,6 @@ class TestUploadService:
                 pytest.fail(
                     f"Failed to get job details after multiple retries: {str(e)}"
                 )
-
         assert result["success"] == True
         expected_annual_salary = 50 * 2080
         assert float(job["salary_min"]) == float(expected_annual_salary)
@@ -191,8 +166,6 @@ class TestUploadService:
     def test_company_reuse(
         self, upload_service, sample_job_data, client, created_company
     ):
-        """Test that uploading multiple jobs for same company reuses company profile."""
-        # Upload first job
         first_result = upload_service.upload_job(job_data=sample_job_data)
 
         if first_result["success"]:
@@ -204,8 +177,6 @@ class TestUploadService:
                 pytest.fail(
                     f"Failed to get job details after multiple retries: {str(e)}"
                 )
-
-        # Upload second job with same company
         second_job_data = sample_job_data.copy()
         second_job_data["title"] = f"Second Test Job {datetime.now().timestamp()}"
         second_result = upload_service.upload_job(job_data=second_job_data)
@@ -216,5 +187,92 @@ class TestUploadService:
         except Exception as e:
             pytest.fail(f"Failed to get job details after multiple retries: {str(e)}")
 
-        # Verify same company was reused
         assert second_job["company"]["id"] == created_company.company_id
+
+    def test_update_existing_job(
+        self, upload_service, sample_job_data, client, created_company
+    ):
+        """Test updating an existing job."""
+        job_types = client.job_types.list()
+        sample_job_data["job_type_id"] = job_types[0]["id"]
+
+        first_result = upload_service.upload_job(job_data=sample_job_data)
+        assert first_result["success"] == True
+        assert first_result["operation"] == "created"
+
+        job_id = first_result["job"]["id"]
+        if first_result["job"].get("company"):
+            created_company.company_id = first_result["job"]["company"]["id"]
+
+        updated_job_data = sample_job_data.copy()
+        updated_job_data["title"] = sample_job_data["title"]
+        updated_job_data["description_html"] = "<p>Updated job description</p>"
+        updated_job_data["salary"] = "$90,000 - $120,000 per year"
+
+        update_result = upload_service.upload_job(job_data=updated_job_data)
+
+        assert update_result["success"] == True
+        assert update_result["operation"] == "updated"
+
+        updated_job = get_job_with_retry(client, job_id)
+        assert updated_job["description_html"] == "<p>Updated job description</p>"
+        assert float(updated_job["salary_min"]) == 90000
+        assert float(updated_job["salary_max"]) == 120000
+
+    def test_find_existing_job(
+        self, upload_service, sample_job_data, client, created_company
+    ):
+        """Test the _find_existing_job method."""
+        job_types = client.job_types.list()
+        sample_job_data["job_type_id"] = job_types[0]["id"]
+
+        result = upload_service.upload_job(job_data=sample_job_data)
+        assert result["success"] == True
+
+        if result["job"].get("company"):
+            created_company.company_id = result["job"]["company"]["id"]
+
+        search_data = {
+            "title": sample_job_data["title"],
+            "company_id": created_company.company_id,
+            "location_id": result["job"]["location"]["id"],
+        }
+
+        existing_job_id = upload_service._find_existing_job(search_data)
+
+        assert existing_job_id is not None
+        assert existing_job_id == result["job"]["id"]
+
+    def test_update_nonexistent_job(self, upload_service, sample_job_data, client):
+        """Test attempting to update a job that doesn't exist creates new job."""
+        job_types = client.job_types.list()
+        sample_job_data["job_type_id"] = job_types[0]["id"]
+        sample_job_data["title"] = f"Nonexistent Job {datetime.now().timestamp()}"
+
+        result = upload_service.upload_job(job_data=sample_job_data)
+
+        assert result["success"] == True
+        assert result["operation"] == "created"
+
+    def test_update_job_error_handling(
+        self, upload_service, sample_job_data, client, created_company
+    ):
+        """Test error handling during job updates."""
+        job_types = client.job_types.list()
+        sample_job_data["job_type_id"] = job_types[0]["id"]
+
+        first_result = upload_service.upload_job(job_data=sample_job_data)
+        assert first_result["success"] == True
+
+        if first_result["job"].get("company"):
+            created_company.company_id = first_result["job"]["company"]["id"]
+
+        invalid_job_data = sample_job_data.copy()
+        invalid_job_data["title"] = sample_job_data["title"]
+        invalid_job_data["salary"] = "invalid salary format"
+
+        update_result = upload_service.upload_job(job_data=invalid_job_data)
+
+        assert update_result["success"] == False
+        assert "error" in update_result
+        assert "salary" in update_result.get("field_error", "")

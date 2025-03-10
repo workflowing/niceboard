@@ -1,5 +1,6 @@
 # tests/test_client.py
 import pytest
+
 from niceboard import Client
 
 

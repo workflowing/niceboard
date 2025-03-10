@@ -1,23 +1,41 @@
 # src/niceboard/resources/jobs.py
-from typing import Dict, Any, List, Optional
+import json
+from typing import Any, Dict, List, Optional
+
 from ..resource import Resource
-from urllib.parse import urlencode
 
 
 class Jobs(Resource):
     def list(
-        self, company: Optional[str] = None, page: int = 1, limit: int = 30, **kwargs
+        self,
+        page: int = 1,
+        limit: int = 30,
+        jobtype: Optional[str] = None,
+        company: Optional[str] = None,
+        category: Optional[str] = None,
+        secondary_category: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        location: Optional[str] = None,
+        remote_ok: Optional[bool] = None,
+        is_featured: Optional[bool] = None,
+        keyword: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """
-        List jobs with optional filtering.
+        params = {
+            "page": page,
+            "limit": limit,
+            "jobtype": jobtype,
+            "company": company,
+            "category": category,
+            "secondary_category": secondary_category,
+            "location": location,
+            "remote_ok": remote_ok,
+            "is_featured": is_featured,
+            "keyword": keyword,
+        }
 
-        Args:
-            company (str): Filter by company slug
-            page (int): Page number for pagination
-            limit (int): Number of results per page
-            **kwargs: Additional filter parameters
-        """
-        params = {"company": company, "page": page, "limit": limit, **kwargs}
+        if tags:
+            params["tags"] = json.dumps(tags)
+
         params = {k: v for k, v in params.items() if v is not None}
 
         response = self._make_request("GET", "jobs", params=params)
@@ -34,7 +52,6 @@ class Jobs(Resource):
         description_html: str,
         **kwargs,
     ) -> Dict[str, Any]:
-        """Create a new job posting."""
         payload = {
             "company_id": company_id,
             "jobtype_id": jobtype_id,
@@ -47,7 +64,6 @@ class Jobs(Resource):
         return response.json()
 
     def get(self, job_id: int) -> Dict[str, Any]:
-        """Get a specific job by ID."""
         response = self._make_request("GET", f"jobs/{job_id}")
         result = response.json()
         job = result.get("results", {}).get("job", {})
@@ -56,18 +72,13 @@ class Jobs(Resource):
         return job
 
     def update(self, job_id: int, **kwargs) -> Dict[str, Any]:
-        """Update an existing job."""
         response = self._make_request("PATCH", f"jobs/{job_id}", data=kwargs)
         return response.json()
 
     def delete(self, job_id: int) -> Dict[str, Any]:
-        """Update an existing job."""
         response = self._make_request("DELETE", f"jobs/{job_id}")
         return response.json()
 
     def add_job_fields(self, job: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Enrich job data with calculated properties.
-        """
         job["published_url"] = f"{self.base_job_url}/{job['id']}-{job['slug']}"
         return job

@@ -1,10 +1,11 @@
 import os
-import pytest
 from pprint import pprint
-from typing import Dict, Any
+from typing import Any, Dict
 
-from niceboard.services.search import NiceBoardSearchService
+import pytest
+
 from niceboard.exceptions import SearchError
+from niceboard.services.search import NiceBoardSearchService
 
 
 @pytest.fixture

@@ -1,8 +1,9 @@
 # src/niceboard/resource.py
-from requests import Session
-from tenacity import retry, stop_after_attempt, wait_exponential
 import logging
 import os
+
+from requests import Session
+from tenacity import retry, stop_after_attempt, wait_exponential
 
 
 class Resource:
@@ -27,7 +28,7 @@ class Resource:
     @property
     def base_job_url(self) -> str:
         """Get the base URL for job listings."""
-        base_url = os.getenv("NICEBOARD_BASE_URL")
+        base_url = os.getenv("NICEBOARD_BASE_URL") or self.base_url
         domain = "/".join(base_url.split("/")[:3])
         return f"{domain}/job"
 
