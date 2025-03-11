@@ -644,6 +644,12 @@ class NiceBoardUploadService:
                     self._prefetch_companies(valid_batch)
                     self._batch_process_locations(valid_batch)
 
+                    for job in valid_batch:
+                        if "company_id" not in job and "company_name" in job:
+                            job["company_id"] = self._process_company(job)
+                        if "location_id" not in job and "location" in job:
+                            job["location_id"] = self._process_location(job["location"])
+
                     self._batch_existing_jobs = self._batch_find_existing_jobs(
                         valid_batch
                     )
