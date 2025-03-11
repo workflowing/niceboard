@@ -108,6 +108,11 @@ class NiceBoardUploadService:
     def _process_company(self, company_data: Dict[str, Any]) -> int:
         """Process a company, using cache when possible."""
         try:
+            if "company_name" not in company_data:
+                raise ValueError("Missing required field: company_name")
+            if company_data["company_name"] is None:
+                raise ValueError("company_name cannot be None")
+
             company_name = company_data["company_name"].lower()
 
             # Check cache first
@@ -220,6 +225,8 @@ class NiceBoardUploadService:
 
     def _get_jobType_id(self, job_type: str) -> int:
         """Get job type ID with caching."""
+        if job_type is None:
+            raise ValueError("Job type cannot be None")
         if not job_type:
             raise ValueError("Job type cannot be empty")
 
@@ -532,7 +539,6 @@ class NiceBoardUploadService:
                 else:
                     existing_job_id = self._find_existing_job(job_data)
 
-                # Update existing job
                 if existing_job_id:
                     response = self.client.jobs.update(existing_job_id, **job_params)
                     return {
@@ -541,40 +547,14 @@ class NiceBoardUploadService:
                         "job": response.get("job", {}),
                         "timestamp": datetime.now().isoformat(),
                     }
-
-                # Create new job - with error handling for "job already exists"
-                try:
+                else:
                     response = self.client.jobs.create(**job_params)
-                except Exception as api_error:
-                    # Check if the error is because the job already exists
-                    error_response = getattr(api_error, "response", None)
-                    if error_response:
-                        # Try to parse JSON from error response
-                        try:
-                            error_data = error_response.json()
-                            existing_id = self._extract_job_id_from_error(error_data)
-                            if existing_id:
-                                # Update instead of create
-                                response = self.client.jobs.update(
-                                    existing_id, **job_params
-                                )
-                                return {
-                                    "success": True,
-                                    "operation": "updated",
-                                    "job": response.get("job", {}),
-                                    "timestamp": datetime.now().isoformat(),
-                                }
-                        except Exception:
-                            pass
-                    # Re-raise if we couldn't handle the error
-                    raise
-
-                return {
-                    "success": True,
-                    "operation": "created",
-                    "job": response.get("job", {}),
-                    "timestamp": datetime.now().isoformat(),
-                }
+                    return {
+                        "success": True,
+                        "operation": "created",
+                        "job": response.get("job", {}),
+                        "timestamp": datetime.now().isoformat(),
+                    }
 
             except Exception as e:
                 return {
@@ -605,7 +585,6 @@ class NiceBoardUploadService:
         jobs = kwargs.get("jobs", [])
         batch_size = kwargs.get("batch_size", 10)
 
-        # Initialize results with proper types
         results: Dict[str, Any] = {
             "total": len(jobs),
             "successful": 0,
@@ -618,34 +597,93 @@ class NiceBoardUploadService:
         for i in range(0, len(jobs), batch_size):
             batch = jobs[i : i + batch_size]
 
-            # Prefetch data for the entire batch
-            self._prefetch_job_types()
-            self._prefetch_companies(batch)
-            self._batch_process_locations(batch)
-
-            # Find existing jobs in batch to minimize API calls
-            self._batch_existing_jobs = self._batch_find_existing_jobs(batch)
-
+            valid_batch = []
             for j, job in enumerate(batch):
-                upload_result = self.upload_job(job_data=job, batch_mode=True)
+                missing_fields = []
 
-                if upload_result.get("success") is True:
-                    results["successful"] += 1
+                if "company_id" not in job and (
+                    "company_name" not in job or job["company_name"] is None
+                ):
+                    missing_fields.append("company_id or company_name")
 
-                    job_id = upload_result.get("job", {}).get("id")
-                    if job_id is not None:
-                        results["job_ids"].append(job_id)
-                else:
+                if "location_id" not in job and (
+                    "location" not in job or job["location"] is None
+                ):
+                    missing_fields.append("location_id or location")
+
+                if "jobtype_id" not in job and (
+                    "job_type" not in job or job["job_type"] is None
+                ):
+                    missing_fields.append("jobtype_id or job_type")
+
+                for field in ["title", "description_html"]:
+                    if field not in job or job[field] is None:
+                        missing_fields.append(field)
+
+                if "apply_by_form" in job and job["apply_by_form"] is False:
+                    if "apply_url" not in job and "apply_email" not in job:
+                        missing_fields.append("apply_url or apply_email")
+
+                if missing_fields:
                     results["failed"] += 1
-                    job_index = i + j
-                    error_info = upload_result.copy()
-                    error_info["job_index"] = job_index
-                    error_info["job_title"] = job.get("title", "Unknown")
+                    error_info = {
+                        "success": False,
+                        "message": f"Missing required fields: {', '.join(missing_fields)}",
+                        "timestamp": datetime.now().isoformat(),
+                        "job_index": i + j,
+                        "job_title": job.get("title", "Unknown"),
+                        "field_error": missing_fields[0] if missing_fields else None,
+                    }
                     results["errors"].append(error_info)
+                else:
+                    valid_batch.append(job)
 
-            # Clear the batch-specific cache
-            if hasattr(self, "_batch_existing_jobs"):
-                delattr(self, "_batch_existing_jobs")
+            if valid_batch:
+                try:
+                    self._prefetch_job_types()
+                    self._prefetch_companies(valid_batch)
+                    self._batch_process_locations(valid_batch)
+
+                    self._batch_existing_jobs = self._batch_find_existing_jobs(
+                        valid_batch
+                    )
+
+                    for job in valid_batch:
+                        job_index = i + batch.index(job)
+
+                        try:
+                            upload_result = self.upload_job(
+                                job_data=job, batch_mode=True
+                            )
+
+                            if upload_result.get("success") is True:
+                                results["successful"] += 1
+
+                                job_id = upload_result.get("job", {}).get("id")
+                                if job_id is not None:
+                                    results["job_ids"].append(job_id)
+                            else:
+                                results["failed"] += 1
+                                error_info = upload_result.copy()
+                                error_info["job_index"] = job_index
+                                error_info["job_title"] = job.get("title", "Unknown")
+                                results["errors"].append(error_info)
+                        except Exception as e:
+                            results["failed"] += 1
+                            results["errors"].append(
+                                {
+                                    "success": False,
+                                    "message": f"Error processing job: {str(e)}",
+                                    "timestamp": datetime.now().isoformat(),
+                                    "job_index": job_index,
+                                    "job_title": job.get("title", "Unknown"),
+                                }
+                            )
+                except Exception as e:
+                    pass
+                finally:
+                    if hasattr(self, "_batch_existing_jobs"):
+                        delattr(self, "_batch_existing_jobs")
 
         if results["failed"] == 0:
             results["success"] = True
