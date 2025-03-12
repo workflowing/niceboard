@@ -518,7 +518,7 @@ class NiceBoardUploadService:
                         "field_error": "job_type",
                     }
 
-            # Prepare common job parameters
+            # Start with required parameters and include salary_info
             job_params = {
                 "company_id": job_data["company_id"],
                 "jobtype_id": job_data["jobtype_id"],
@@ -528,9 +528,30 @@ class NiceBoardUploadService:
                 "location_id": job_data["location_id"],
                 "is_remote": job_data.get("remote", False),
                 "remote_only": job_data.get("remote", False),
-                "apply_url": job_data.get("apply_url"),
                 **salary_info,
             }
+
+            # Define optional parameters
+            optional_params = [
+                "apply_url",
+                "apply_email",
+                "category_id",
+                "secondary_category_id",
+                "tags",
+                "salary_timeframe",
+                "salary_currency",
+                "remote_required_location",
+                "is_featured",
+                "is_published",
+                "published_at",
+                "expires_on",
+                "custom_fields",
+            ]
+
+            # Add optional parameters only if they exist in job_data
+            for param in optional_params:
+                if param in job_data:
+                    job_params[param] = job_data[param]
 
             # First check if job exists
             try:
