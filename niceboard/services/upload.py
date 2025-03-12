@@ -103,7 +103,9 @@ class NiceBoardUploadService:
                                     "slug"
                                 ]
                 except Exception as e:
-                    print(f"Failed to process location batch {location}: {str(e)}")
+                    raise ValueError(
+                        f"Failed to process location batch {location}: {str(e)}"
+                    )
 
     def _process_company(self, company_data: Dict[str, Any]) -> int:
         """Process a company, using cache when possible."""
@@ -136,7 +138,9 @@ class NiceBoardUploadService:
                         company_data["company_logo_url"], company_data.get("website")
                     )
                 except Exception as e:
-                    print(f"Logo processing failed: {str(e)}")
+                    raise ValueError(
+                        f"Logo processing failed for company '{company_data['company_name']}': {str(e)}"
+                    )
 
             company = self.client.companies.create(
                 name=company_data["company_name"],
@@ -215,9 +219,14 @@ class NiceBoardUploadService:
                 amount = parse_amount(numbers[0]) * multiplier
                 salary_data["salary_min"] = amount
                 salary_data["salary_max"] = amount
+            else:
+                # If no numbers found, raise exception
+                raise ValueError(f"No salary amounts found in text: {salary_text}")
 
         except Exception as e:
-            print(f"Could not parse salary text: {salary_text} - Error: {str(e)}")
+            raise ValueError(
+                f"Could not parse salary text: {salary_text} - Error: {str(e)}"
+            )
 
         return salary_data
 
@@ -387,7 +396,7 @@ class NiceBoardUploadService:
                             job_dict[normalized_title]
                         )
             except Exception as e:
-                print(
+                raise ValueError(
                     f"Error finding existing jobs for company {company_id}, location {location_id}: {str(e)}"
                 )
 
