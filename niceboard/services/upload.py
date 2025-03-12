@@ -173,16 +173,14 @@ class NiceBoardUploadService:
             location_id = self.client.locations.get_or_create(standardized_location)
 
             if location_id is None:
-                raise ValueError(
-                    f"Failed to get or create location for: {standardized_location}"
-                )
+                raise ValueError(f"Failed to create location: {standardized_location}")
 
             # Update cache
             self._location_cache[location] = location_id
             return location_id
 
         except Exception as e:
-            raise ValueError(f"Failed to process location: {str(e)}") from e
+            raise ValueError(f"{str(e)}") from e
 
     def _process_salary(self, salary_text: str) -> Dict[str, Optional[float]]:
         """Process salary information. This is fast enough and doesn't need caching."""
@@ -686,7 +684,34 @@ class NiceBoardUploadService:
                                 }
                             )
                 except Exception as e:
-                    pass
+                    # Instead of silently passing, mark all remaining valid jobs as failed
+                    for job in valid_batch:
+                        job_index = i + batch.index(job)
+
+                        # Check if this job has already been counted as a success or failure
+                        already_processed = False
+                        for error in results["errors"]:
+                            if error.get("job_index") == job_index:
+                                already_processed = True
+                                break
+
+                        if already_processed or job_index in [
+                            results["job_ids"].index(j) for j in results["job_ids"] if j
+                        ]:
+                            continue
+
+                        # If not already processed, mark as failed
+                        results["failed"] += 1
+                        results["errors"].append(
+                            {
+                                "success": False,
+                                "message": f"{str(e)}",
+                                "timestamp": datetime.now().isoformat(),
+                                "job_index": job_index,
+                                "job_title": job.get("title", "Unknown"),
+                                "field_error": "batch_error",
+                            }
+                        )
                 finally:
                     if hasattr(self, "_batch_existing_jobs"):
                         delattr(self, "_batch_existing_jobs")
